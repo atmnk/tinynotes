@@ -25,6 +25,7 @@ import {
 
 import type { RichTextContent } from "@/lib/note-content"
 import { defaultNoteContent } from "@/lib/note-content"
+import { useRecaptcha } from "@/hooks/use-recaptcha"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -78,6 +79,7 @@ export function NoteWorkspace({
   recoveryEnabled: boolean
 }) {
   const router = useRouter()
+  const executeRecaptcha = useRecaptcha()
   const saveTimerRef = useRef<number | null>(null)
   const hydratedContentRef = useRef(Boolean(initialNote))
   const [accessPassword, setAccessPassword] = useState("")
@@ -239,10 +241,12 @@ export function NoteWorkspace({
       setIsUnlocking(true)
       setUnlockError(null)
 
+      const recaptchaToken = await executeRecaptcha("unlock_note")
       const response = await fetch(`/api/notes/${slug}`, {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          ...(recaptchaToken ? { "x-recaptcha-token": recaptchaToken } : {}),
         },
         body: JSON.stringify({
           password,
@@ -267,7 +271,7 @@ export function NoteWorkspace({
       setSyncMessage(null)
       router.refresh()
     },
-    [applyUnlockedNote, router, slug]
+    [applyUnlockedNote, executeRecaptcha, router, slug]
   )
 
   const claimNote = useCallback(
@@ -275,10 +279,12 @@ export function NoteWorkspace({
       setIsUnlocking(true)
       setUnlockError(null)
 
+      const recaptchaToken = await executeRecaptcha("claim_note")
       const response = await fetch("/api/notes/access", {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          ...(recaptchaToken ? { "x-recaptcha-token": recaptchaToken } : {}),
         },
         body: JSON.stringify({
           slug,
@@ -309,7 +315,7 @@ export function NoteWorkspace({
       setSyncMessage(null)
       router.refresh()
     },
-    [applyUnlockedNote, recoveryEmail, recoveryEnabled, router, slug]
+    [applyUnlockedNote, executeRecaptcha, recoveryEmail, recoveryEnabled, router, slug]
   )
 
   const refreshLatestNote = useCallback(async () => {
@@ -593,6 +599,26 @@ export function NoteWorkspace({
                 <AlertDescription>{unlockError}</AlertDescription>
               </Alert>
             ) : null}
+            <p className="text-xs text-muted-foreground">
+              Protected by reCAPTCHA —{" "}
+              <a
+                href="https://policies.google.com/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2"
+              >
+                Privacy
+              </a>{" "}
+              &amp;{" "}
+              <a
+                href="https://policies.google.com/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2"
+              >
+                Terms
+              </a>
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -654,6 +680,26 @@ export function NoteWorkspace({
                 <AlertDescription>{unlockError}</AlertDescription>
               </Alert>
             ) : null}
+            <p className="text-xs text-muted-foreground">
+              Protected by reCAPTCHA —{" "}
+              <a
+                href="https://policies.google.com/privacy"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2"
+              >
+                Privacy
+              </a>{" "}
+              &amp;{" "}
+              <a
+                href="https://policies.google.com/terms"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline underline-offset-2"
+              >
+                Terms
+              </a>
+            </p>
           </CardContent>
         </Card>
       </div>

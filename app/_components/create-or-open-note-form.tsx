@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation"
 import { useMemo, useState, useTransition } from "react"
 
+import { useRecaptcha } from "@/hooks/use-recaptcha"
+
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -26,6 +28,7 @@ export function CreateOrOpenNoteForm({
   recoveryEnabled: boolean
 }) {
   const router = useRouter()
+  const executeRecaptcha = useRecaptcha()
   const [isPending, startTransition] = useTransition()
   const [slug, setSlug] = useState("")
   const [password, setPassword] = useState("")
@@ -47,10 +50,12 @@ export function CreateOrOpenNoteForm({
     setMessage(null)
 
     startTransition(async () => {
+      const recaptchaToken = await executeRecaptcha("create_or_open_note")
       const response = await fetch("/api/notes/access", {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          ...(recaptchaToken ? { "x-recaptcha-token": recaptchaToken } : {}),
         },
         body: JSON.stringify({
           slug,
@@ -176,6 +181,26 @@ export function CreateOrOpenNoteForm({
         <p className="text-xs text-muted-foreground">
           Need direct access later? Open any saved note URL from the address bar
           and enter its password again.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Protected by reCAPTCHA —{" "}
+          <a
+            href="https://policies.google.com/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
+            Privacy
+          </a>{" "}
+          &amp;{" "}
+          <a
+            href="https://policies.google.com/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
+            Terms
+          </a>
         </p>
       </CardContent>
     </Card>

@@ -2,6 +2,11 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Hide the floating reCAPTCHA badge; attribution text is shown inline instead */
+.grecaptcha-badge {
+  visibility: hidden !important;
+}
+
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {

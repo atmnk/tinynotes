@@ -8,6 +8,7 @@ import {
 } from "@/lib/note-auth-session"
 import { changeNotePassword, saveNote, unlockNote } from "@/lib/notes"
 import type { RichTextContent } from "@/lib/note-content"
+import { verifyRecaptchaToken } from "@/lib/recaptcha"
 import {
   changePasswordSchema,
   saveNoteSchema,
@@ -63,6 +64,16 @@ export async function POST(request: Request, context: RouteContext) {
 
   if (!slugResult.success) {
     return NextResponse.json({ error: "Invalid slug." }, { status: 400 })
+  }
+
+  const token = request.headers.get("x-recaptcha-token")
+  const isHuman = await verifyRecaptchaToken(token)
+
+  if (!isHuman) {
+    return NextResponse.json(
+      { error: "Request could not be verified. Please try again." },
+      { status: 403 }
+    )
   }
 
   const json = await request.json().catch(() => null)

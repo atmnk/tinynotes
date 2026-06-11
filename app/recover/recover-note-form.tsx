@@ -4,6 +4,8 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 
+import { useRecaptcha } from "@/hooks/use-recaptcha"
+
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -12,6 +14,7 @@ import { Label } from "@/components/ui/label"
 
 export function RecoverNoteForm({ initialSlug }: { initialSlug: string }) {
   const router = useRouter()
+  const executeRecaptcha = useRecaptcha()
   const [isPending, startTransition] = useTransition()
   const [slug, setSlug] = useState(initialSlug)
   const [recoveryKey, setRecoveryKey] = useState("")
@@ -34,10 +37,12 @@ export function RecoverNoteForm({ initialSlug }: { initialSlug: string }) {
     }
 
     startTransition(async () => {
+      const recaptchaToken = await executeRecaptcha("recover_note")
       const response = await fetch("/api/recovery", {
         method: "POST",
         headers: {
           "content-type": "application/json",
+          ...(recaptchaToken ? { "x-recaptcha-token": recaptchaToken } : {}),
         },
         body: JSON.stringify({
           slug,
@@ -125,6 +130,26 @@ export function RecoverNoteForm({ initialSlug }: { initialSlug: string }) {
         <p className="text-sm text-muted-foreground">
           Enter the slug and the one-time recovery key that was emailed when
           the note was created.
+        </p>
+        <p className="text-xs text-muted-foreground">
+          Protected by reCAPTCHA —{" "}
+          <a
+            href="https://policies.google.com/privacy"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
+            Privacy
+          </a>{" "}
+          &amp;{" "}
+          <a
+            href="https://policies.google.com/terms"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline underline-offset-2"
+          >
+            Terms
+          </a>
         </p>
         <Button asChild variant="ghost">
           <Link href="/">Back home</Link>

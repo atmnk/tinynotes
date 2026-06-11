@@ -3,12 +3,23 @@ import { NextResponse } from "next/server"
 import { attachNoteAccessCookie } from "@/lib/note-auth-session"
 import { isRecoveryFeatureEnabled } from "@/lib/features"
 import { createOrOpenNote, deleteNoteBySlug } from "@/lib/notes"
+import { verifyRecaptchaToken } from "@/lib/recaptcha"
 import { sendRecoveryKeyEmail } from "@/lib/recovery"
 import { accessNoteSchema } from "@/lib/validation"
 
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
+  const token = request.headers.get("x-recaptcha-token")
+  const isHuman = await verifyRecaptchaToken(token)
+
+  if (!isHuman) {
+    return NextResponse.json(
+      { error: "Request could not be verified. Please try again." },
+      { status: 403 }
+    )
+  }
+
   const json = await request.json().catch(() => null)
   const parsed = accessNoteSchema.safeParse(json)
 

@@ -43,6 +43,8 @@ Keep this file up to date as the project evolves. When important architectural, 
 - Use `DATABASE_URL` for both local Docker/Postgres and production Neon connections.
 - In Netlify, set `DATABASE_URL` to the Neon connection string via Netlify's environment variables UI.
 - Use `AUTH_COOKIE_SECRET` for encrypted note-access cookies.
+- reCAPTCHA v3 protects `POST /api/notes/access`, `POST /api/notes/[slug]` (unlock), and `POST /api/recovery`. Client sends token in `x-recaptcha-token` header; server verifies via `lib/recaptcha.ts`. When `RECAPTCHA_SECRET_KEY` is unset (local dev), verification is skipped automatically.
+- `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` and `RECAPTCHA_SECRET_KEY` must be set in production. The floating badge is hidden via CSS; Google-required attribution links appear inline in each protected form.
 - Do not use `NETLIFY_DB_URL` or the `@netlify/database` package — Netlify Database is a paid product.
 - The `netlify/database/migrations/` directory exists as reference SQL; it is not applied automatically.
 - The database layer lazily ensures the `notes` table exists on startup (for both local and production).

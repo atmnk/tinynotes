@@ -3,6 +3,7 @@ import { NextResponse } from "next/server"
 import { isRecoveryFeatureEnabled } from "@/lib/features"
 import { attachNoteAccessCookie } from "@/lib/note-auth-session"
 import { recoverNoteWithRecoveryKey } from "@/lib/notes"
+import { verifyRecaptchaToken } from "@/lib/recaptcha"
 import { resetRecoverySchema } from "@/lib/validation"
 
 export const runtime = "nodejs"
@@ -10,6 +11,16 @@ export const runtime = "nodejs"
 export async function POST(request: Request) {
   if (!isRecoveryFeatureEnabled()) {
     return NextResponse.json({ error: "Not found." }, { status: 404 })
+  }
+
+  const token = request.headers.get("x-recaptcha-token")
+  const isHuman = await verifyRecaptchaToken(token)
+
+  if (!isHuman) {
+    return NextResponse.json(
+      { error: "Request could not be verified. Please try again." },
+      { status: 403 }
+    )
   }
 
   const json = await request.json().catch(() => null)
