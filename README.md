@@ -17,9 +17,9 @@ Users can also go directly to a slug URL like `http://localhost:3000/sedin`:
 - Next.js 16 App Router
 - shadcn/ui
 - TipTap editor
-- Postgres via `DATABASE_URL`
-- Netlify deployment for production
-- Neon as the intended hosted database
+- Postgres via `DATABASE_URL` locally
+- Netlify Database for production database management
+- Neon as the hosted Postgres layer behind Netlify Database
 
 ## Local development
 
@@ -43,12 +43,13 @@ Legacy plaintext notes from earlier local runs are automatically migrated to enc
 ## Production deployment
 
 - Deploy to Netlify.
+- Initialize Netlify Database with `npx netlify db init` and choose `Direct SQL` if you want to keep hand-authored SQL migrations.
 - Netlify's current Next.js support uses the OpenNext adapter automatically, which turns App Router SSR and route handlers into Netlify Functions.
-- Set `DATABASE_URL` in Netlify to your Neon connection string.
+- Netlify Database manages the production connection via `NETLIFY_DB_URL`.
 - Set `AUTH_COOKIE_SECRET` in Netlify to a long random secret for encrypted auth cookies.
 - Set `RECOVERY_FEATURE_ENABLED="true"` in Netlify only if you want email recovery enabled.
 - If recovery is enabled, also set Mailjet env vars in Netlify: `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `MAILJET_FROM_EMAIL`, and optionally `MAILJET_FROM_NAME`.
-- If you install the Neon integration/plugin in Netlify, let it manage the production `DATABASE_URL`.
+- Author schema changes in `netlify/database/migrations/` and deploy them through Netlify.
 
 ## Recovery flow
 

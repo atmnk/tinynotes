@@ -39,12 +39,14 @@ Keep this file up to date as the project evolves. When important architectural, 
 - Local development should work against Dockerized Postgres.
 - Target deployment is Netlify.
 - Production server-side work should run through Netlify Functions on the free tier.
-- Database target is Neon free tier.
-- Use `DATABASE_URL` for database connectivity.
+- Database target is Netlify Database backed by Neon on the free tier.
+- Use `DATABASE_URL` for local Docker/Postgres connectivity.
+- In Netlify-managed environments, prefer `NETLIFY_DB_URL` over `DATABASE_URL`.
 - Use `AUTH_COOKIE_SECRET` for encrypted note-access cookies.
-- The database layer should stay compatible with both local Postgres and hosted Neon through the same `DATABASE_URL` contract.
-- A Netlify Neon integration/plugin may be used to manage production database setup and env vars.
-- Current implementation lazily ensures the `notes` table exists on first access.
+- The database layer should stay compatible with both local Postgres and Netlify-managed Neon, using `DATABASE_URL` locally and `NETLIFY_DB_URL` in Netlify-managed environments.
+- Netlify Database should be initialized with `npx netlify db init`.
+- Production schema changes should live in `netlify/database/migrations/` and be applied by Netlify rather than lazy runtime table creation.
+- Current implementation still lazily ensures the `notes` table exists for local non-Netlify development.
 - Passwords are hashed with Node `crypto.scrypt`, not stored in plaintext.
 - Note title and note content are encrypted at rest with the user password, and password changes should re-encrypt stored note data with the new password.
 - Do not store note passwords in local storage. Browser note access should be cached in secure `httpOnly` encrypted cookies instead.
