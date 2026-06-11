@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+
+[build.environment]
+  NODE_VERSION = "20"
+
+# Netlify's current Next.js support uses the OpenNext adapter automatically.
+# App Router route handlers are deployed as Netlify Functions without extra config.
+# If you install Neon through a Netlify integration/plugin in the dashboard,
+# keep DATABASE_URL managed there rather than hardcoding it in this repo.
