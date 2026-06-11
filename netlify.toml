@@ -6,6 +6,5 @@
 
 # Netlify's current Next.js support uses the OpenNext adapter automatically.
 # App Router route handlers are deployed as Netlify Functions without extra config.
-# Netlify Database manages the production Postgres/Neon connection via
-# NETLIFY_DB_URL. Keep that environment variable managed in Netlify rather than
-# hardcoding production credentials in this repo.
+# Set DATABASE_URL to the Neon connection string in Netlify's environment
+# variables UI (Settings > Environment variables). Do not hardcode credentials here.

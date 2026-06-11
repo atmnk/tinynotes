@@ -8,17 +8,13 @@ declare global {
 }
 
 function getDatabaseUrl() {
-  const databaseUrl = process.env.NETLIFY_DB_URL ?? process.env.DATABASE_URL
+  const databaseUrl = process.env.DATABASE_URL
 
   if (!databaseUrl) {
-    throw new Error("NETLIFY_DB_URL or DATABASE_URL must be configured.")
+    throw new Error("DATABASE_URL must be configured.")
   }
 
   return databaseUrl
-}
-
-function usesNetlifyManagedDatabase() {
-  return Boolean(process.env.NETLIFY_DB_URL)
 }
 
 export function getDb() {
@@ -34,10 +30,6 @@ export function getDb() {
 }
 
 export async function ensureSchema() {
-  if (usesNetlifyManagedDatabase()) {
-    return
-  }
-
   if (!globalThis.__notesEverywhereSchemaPromise) {
     const sql = getDb()
 
