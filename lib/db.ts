@@ -39,6 +39,7 @@ export async function ensureSchema() {
         title TEXT NOT NULL DEFAULT 'Untitled note',
         password_hash TEXT NOT NULL,
         content JSONB NOT NULL,
+        version INTEGER NOT NULL DEFAULT 0,
         note_key_password TEXT,
         note_key_recovery TEXT,
         recovery_email TEXT,
@@ -53,6 +54,7 @@ export async function ensureSchema() {
       .then(async () => {
         await sql`
           ALTER TABLE notes
+          ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 0,
           ADD COLUMN IF NOT EXISTS note_key_password TEXT,
           ADD COLUMN IF NOT EXISTS note_key_recovery TEXT,
           ADD COLUMN IF NOT EXISTS recovery_email TEXT,

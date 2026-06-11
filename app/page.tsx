@@ -1,93 +1,205 @@
-import { Sparkles } from "lucide-react"
+import {
+  Globe2,
+  KeyRound,
+  ShieldCheck,
+  Sparkles,
+  Waypoints,
+  Zap,
+} from "lucide-react"
 
+import { AccessibleNotesSidebar } from "@/app/[slug]/_components/accessible-notes-sidebar"
 import { CreateOrOpenNoteForm } from "@/app/_components/create-or-open-note-form"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { isRecoveryFeatureEnabled } from "@/lib/features"
+import { readNoteAccessSession } from "@/lib/note-auth-session"
+import { listAccessibleNotes } from "@/lib/notes"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Separator } from "@/components/ui/separator"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
 
-const highlights = [
-  "Tiny user-chosen slug URLs",
-  "Password-protected anonymous access",
-  "Rich text editor with autosave",
-  "Neon free tier friendly backend",
+const featureCards = [
+  {
+    title: "Tiny links that feel natural",
+    description: "Open notes directly at `/your-slug`, including one-character slugs.",
+    icon: Waypoints,
+  },
+  {
+    title: "Private by design",
+    description: "Content is encrypted at rest and only unlocks with the password you know.",
+    icon: ShieldCheck,
+  },
+  {
+    title: "Editing that stays out of your way",
+    description: "TipTap rich text editing with autosave and conflict-aware tab syncing.",
+    icon: Zap,
+  },
 ]
 
-export default function Page() {
+const productFacts = [
+  {
+    label: "Direct URLs",
+    value: "/ideas",
+    description: "Create once, reopen later from the address bar.",
+  },
+  {
+    label: "Recovery",
+    value: "Optional email",
+    description: "Receive a one-time recovery key when creating a note.",
+  },
+  {
+    label: "Sync model",
+    value: "Autosave",
+    description: "Conflict-aware syncing helps avoid silent overwrites.",
+  },
+]
+
+const steps = [
+  {
+    title: "Choose a short slug",
+    description: "Use something memorable like `ideas`, `trip-plan`, or even `/a`.",
+    icon: Globe2,
+  },
+  {
+    title: "Protect it with a password",
+    description: "The slug is the location. The password is what unlocks the content.",
+    icon: KeyRound,
+  },
+  {
+    title: "Write and return anytime",
+    description: "TinyNotes autosaves as you work and remembers unlocked notes in this browser session.",
+    icon: Sparkles,
+  },
+]
+
+export default async function Page() {
+  const session = await readNoteAccessSession()
+  const accessibleNotes = await listAccessibleNotes(session.notes)
+  const recoveryEnabled = isRecoveryFeatureEnabled()
+  const visibleProductFacts = recoveryEnabled
+    ? productFacts
+    : productFacts.filter((item) => item.label !== "Recovery")
+
   return (
-    <main className="min-h-svh bg-[radial-gradient(circle_at_top_left,_oklch(0.98_0.02_220),_transparent_30%),linear-gradient(135deg,oklch(1_0_0),oklch(0.97_0.01_220))] px-4 py-10 md:px-8">
-      <div className="mx-auto grid w-full max-w-6xl gap-6 lg:grid-cols-[1.15fr_0.85fr]">
-        <section className="space-y-6">
-          <Badge variant="outline" className="w-fit">
-            Anonymous notes, instantly shareable
-          </Badge>
-          <div className="space-y-4">
-            <h1 className="max-w-3xl text-5xl leading-none font-semibold tracking-tight text-balance md:text-7xl">
-              Notes that live at a tiny URL you control.
-            </h1>
-            <p className="max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
-              Pick a slug, set a password, and start writing. If the slug is
-              free, the note is created. If it already exists, the same slug
-              plus password opens it.
-            </p>
+    <SidebarProvider defaultOpen>
+      <AccessibleNotesSidebar currentSlug={null} notes={accessibleNotes} />
+      <SidebarInset className="md:rounded-2xl md:border md:border-border/60 md:bg-background/96 md:shadow-[0_20px_60px_oklch(0_0_0_/_0.12)]">
+        <main className="min-h-svh bg-[radial-gradient(circle_at_top_left,_oklch(0.97_0.03_215),_transparent_26%),linear-gradient(180deg,oklch(0.985_0.004_95),oklch(0.965_0.008_220))] px-4 py-4 md:px-6">
+          <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/78 px-4 py-3 shadow-sm backdrop-blur">
+              <div className="flex flex-wrap items-center gap-3">
+                <SidebarTrigger variant="outline" size="icon-sm" />
+                <Badge variant="outline">TinyNotes</Badge>
+                <p className="text-sm text-muted-foreground">
+                  Private notes at memorable links
+                </p>
+              </div>
+              <Badge variant="secondary">Anonymous. Password protected. Autosaved.</Badge>
+            </div>
+
+            <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_390px]">
+              <section className="space-y-6">
+                <Card className="overflow-hidden border-border/60 bg-background/82 shadow-sm">
+                  <CardContent className="relative px-6 py-8 md:px-8 md:py-10">
+                    <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,oklch(0.86_0.08_208_/_0.28),transparent_70%)]" />
+                    <div className="relative space-y-6">
+                      <div className="space-y-3">
+                        <Badge variant="secondary" className="w-fit">
+                          Designed for direct access
+                        </Badge>
+                        <h1 className="max-w-4xl text-4xl leading-tight font-semibold tracking-tight text-balance md:text-6xl">
+                          Write first. Share the link. Keep the password.
+                        </h1>
+                        <p className="max-w-2xl text-base leading-7 text-muted-foreground md:text-lg">
+                          TinyNotes gives every note a simple URL you choose. Open it
+                          later from any device, unlock it with the password, and keep
+                          writing without accounts, inboxes, or workspace noise.
+                        </p>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {visibleProductFacts.map((item) => (
+                          <div
+                            key={item.label}
+                            className="rounded-xl border border-border/60 bg-background/72 p-4"
+                          >
+                            <p className="text-[11px] font-medium tracking-[0.18em] text-muted-foreground uppercase">
+                              {item.label}
+                            </p>
+                            <p className="mt-2 text-xl font-semibold tracking-tight">
+                              {item.value}
+                            </p>
+                            <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                              {item.description}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  {featureCards.map((feature) => (
+                    <Card
+                      key={feature.title}
+                      className="border-border/60 bg-background/84 shadow-sm"
+                    >
+                      <CardHeader className="gap-3">
+                        <div className="flex size-10 items-center justify-center rounded-xl bg-primary/10 text-primary">
+                          <feature.icon className="size-5" />
+                        </div>
+                        <CardTitle className="text-lg leading-6">
+                          {feature.title}
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent>
+                        <p className="text-sm leading-6 text-muted-foreground">
+                          {feature.description}
+                        </p>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+
+                <Card className="border-border/60 bg-background/84 shadow-sm">
+                  <CardHeader>
+                    <Badge variant="outline" className="w-fit">
+                      How TinyNotes works
+                    </Badge>
+                    <CardTitle className="text-2xl">
+                      A simple flow that stays simple later
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="grid gap-4 md:grid-cols-3">
+                    {steps.map((step, index) => (
+                      <div
+                        key={step.title}
+                        className="rounded-xl border border-border/60 bg-background/76 p-5"
+                      >
+                        <div className="mb-4 flex items-center justify-between">
+                          <div className="flex size-10 items-center justify-center rounded-full bg-secondary text-secondary-foreground">
+                            <step.icon className="size-5" />
+                          </div>
+                          <span className="text-sm font-medium text-muted-foreground">
+                            0{index + 1}
+                          </span>
+                        </div>
+                        <h3 className="text-lg font-semibold">{step.title}</h3>
+                        <p className="mt-2 text-sm leading-6 text-muted-foreground">
+                          {step.description}
+                        </p>
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
+              </section>
+
+              <aside className="lg:sticky lg:top-4">
+                <CreateOrOpenNoteForm recoveryEnabled={recoveryEnabled} />
+              </aside>
+            </div>
           </div>
-
-          <div className="grid gap-3 sm:grid-cols-2">
-            {highlights.map((highlight) => (
-              <Card key={highlight} className="border-border/70 bg-background/80">
-                <CardContent className="flex items-center gap-3 p-4">
-                  <div className="size-2 shrink-0 rounded-full bg-primary" />
-                  <p className="text-sm font-medium">{highlight}</p>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-
-          <Tabs defaultValue="how-it-works" className="w-full">
-            <TabsList className="grid w-full grid-cols-3">
-              <TabsTrigger value="how-it-works">How it works</TabsTrigger>
-              <TabsTrigger value="privacy">Privacy</TabsTrigger>
-              <TabsTrigger value="stack">Stack</TabsTrigger>
-            </TabsList>
-            <TabsContent value="how-it-works">
-              <Card className="bg-background/85">
-                <CardHeader>
-                  <CardTitle>Simple flow</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3 text-sm leading-7 text-muted-foreground">
-                  <p>1. Choose a short slug like `ideas-lab`.</p>
-                  <p>2. Add a password to create or reopen that note.</p>
-                  <p>3. Write in the editor and let autosave handle the rest.</p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-            <TabsContent value="privacy">
-              <Alert>
-                <Sparkles className="size-4" />
-                <AlertTitle>Password-first access</AlertTitle>
-                <AlertDescription>
-                  Notes stay anonymous. Access is controlled only by the slug
-                  and password pairing you choose.
-                </AlertDescription>
-              </Alert>
-            </TabsContent>
-            <TabsContent value="stack">
-              <Card className="bg-background/85">
-                <CardContent className="space-y-4 p-6 text-sm text-muted-foreground">
-                  <p>Built with Next 16 App Router, shadcn/ui, TipTap, and Neon.</p>
-                  <Separator />
-                  <p>Ready for Netlify deployment with a single `DATABASE_URL`.</p>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </section>
-
-        <aside className="lg:pt-8">
-          <CreateOrOpenNoteForm />
-        </aside>
-      </div>
-    </main>
+        </main>
+      </SidebarInset>
+    </SidebarProvider>
   )
 }

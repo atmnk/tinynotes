@@ -39,10 +39,15 @@ export const saveNoteSchema = z.object({
     .min(1, "Title is required.")
     .max(120, "Title must be 120 characters or fewer."),
   content: z.record(z.string(), z.unknown()),
+  expectedVersion: z.number().int().nonnegative().optional(),
 })
 
 export const changePasswordSchema = z.object({
   newPassword: passwordSchema,
+})
+
+export const rotateRecoveryKeySchema = z.object({
+  recoveryEmail: recoveryEmailSchema.optional().or(z.literal("")),
 })
 
 export const resetRecoverySchema = z.object({

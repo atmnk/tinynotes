@@ -20,7 +20,11 @@ function normalizeSlug(value: string) {
     .slice(0, 48)
 }
 
-export function CreateOrOpenNoteForm() {
+export function CreateOrOpenNoteForm({
+  recoveryEnabled,
+}: {
+  recoveryEnabled: boolean
+}) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [slug, setSlug] = useState("")
@@ -48,7 +52,11 @@ export function CreateOrOpenNoteForm() {
         headers: {
           "content-type": "application/json",
         },
-        body: JSON.stringify({ slug, password, recoveryEmail }),
+        body: JSON.stringify({
+          slug,
+          password,
+          recoveryEmail: recoveryEnabled ? recoveryEmail : "",
+        }),
       })
 
       const result = (await response.json().catch(() => null)) as
@@ -70,12 +78,12 @@ export function CreateOrOpenNoteForm() {
   }
 
   return (
-    <Card className="border-border/70 bg-background/92 shadow-xl backdrop-blur">
+    <Card className="border-border/60 bg-background/94 shadow-xl backdrop-blur">
       <CardHeader className="space-y-4">
         <Badge variant="secondary" className="w-fit">
-          Create or open
+          Start a note
         </Badge>
-        <CardTitle className="text-2xl">Claim a slug and start writing</CardTitle>
+        <CardTitle className="text-2xl">Create or unlock a note</CardTitle>
       </CardHeader>
       <CardContent className="space-y-5">
         <form className="space-y-5" onSubmit={onSubmit}>
@@ -84,7 +92,7 @@ export function CreateOrOpenNoteForm() {
             <Input
               id="slug"
               value={slug}
-              placeholder="my-shared-note"
+              placeholder="ideas"
               autoCapitalize="off"
               autoCorrect="off"
               spellCheck={false}
@@ -104,28 +112,29 @@ export function CreateOrOpenNoteForm() {
               onChange={(event) => setPassword(event.target.value)}
             />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="recovery-email">Recovery email (Optional)</Label>
-            <Input
-              id="recovery-email"
-              type="email"
-              value={recoveryEmail}
-              placeholder="you@example.com"
-              onChange={(event) => setRecoveryEmail(event.target.value)}
-            />
-            <p className="text-xs text-muted-foreground">
-              Used only for password recovery links. Recovery emails are always
-              sent to the stored address for that note, never to an override
-              address entered later.
-            </p>
-          </div>
+          {recoveryEnabled ? (
+            <div className="space-y-2">
+              <Label htmlFor="recovery-email">Recovery email (Optional)</Label>
+              <Input
+                id="recovery-email"
+                type="email"
+                value={recoveryEmail}
+                placeholder="you@example.com"
+                onChange={(event) => setRecoveryEmail(event.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                If added, a one-time recovery key is emailed immediately and can
+                be used later to reset access.
+              </p>
+            </div>
+          ) : null}
           <Button
             type="submit"
             size="lg"
             className="w-full"
             disabled={isPending || !slug || password.length < 6}
           >
-            {isPending ? "Opening..." : "Create or open note"}
+            {isPending ? "Opening..." : "Open TinyNotes"}
           </Button>
         </form>
 
@@ -161,15 +170,12 @@ export function CreateOrOpenNoteForm() {
         </div>
 
         <p className="text-xs leading-6 text-muted-foreground">
-          Deploy on Netlify with a Neon `DATABASE_URL`. This starter keeps
-          access anonymous and skips user accounts entirely.
+          No signup required. Just remember the slug and password
+          {recoveryEnabled ? ", plus any recovery key sent to your email." : "."}
         </p>
         <p className="text-xs text-muted-foreground">
           Need direct access later? Open any saved note URL from the address bar
           and enter its password again.
-        </p>
-        <p className="text-xs text-muted-foreground">
-          Codex project notes live in <span className="font-mono">CODEX_CONTEXT.md</span>.
         </p>
       </CardContent>
     </Card>

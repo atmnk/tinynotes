@@ -5,9 +5,9 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { TooltipProvider } from "@/components/ui/tooltip"
 
 export const metadata: Metadata = {
-  title: "Notes Everywhere",
+  title: "TinyNotes",
   description:
-    "Anonymous password-protected notes with tiny slugs, rich text editing, and autosave.",
+    "TinyNotes is an anonymous password-protected note app with tiny slugs, rich text editing, and autosave.",
 }
 
 export default function RootLayout({

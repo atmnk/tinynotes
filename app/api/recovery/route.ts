@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 
+import { isRecoveryFeatureEnabled } from "@/lib/features"
 import { attachNoteAccessCookie } from "@/lib/note-auth-session"
 import { recoverNoteWithRecoveryKey } from "@/lib/notes"
 import { resetRecoverySchema } from "@/lib/validation"
@@ -7,6 +8,10 @@ import { resetRecoverySchema } from "@/lib/validation"
 export const runtime = "nodejs"
 
 export async function POST(request: Request) {
+  if (!isRecoveryFeatureEnabled()) {
+    return NextResponse.json({ error: "Not found." }, { status: 404 })
+  }
+
   const json = await request.json().catch(() => null)
   const parsed = resetRecoverySchema.safeParse(json)
 

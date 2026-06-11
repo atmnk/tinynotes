@@ -17,6 +17,7 @@ import {
   List,
   ListOrdered,
   LoaderCircle,
+  Mail,
   Quote,
   Save,
   Type,
@@ -47,6 +48,7 @@ type NotePayload = {
   slug: string
   title: string
   content: RichTextContent
+  version: number
   updatedAt: string
 }
 
@@ -66,12 +68,14 @@ export function NoteWorkspace({
   updatedAt,
   noteExists,
   initialNote,
+  recoveryEnabled,
 }: {
   slug: string
   initialTitle: string
   updatedAt: string
   noteExists: boolean
   initialNote: NotePayload | null
+  recoveryEnabled: boolean
 }) {
   const router = useRouter()
   const saveTimerRef = useRef<number | null>(null)
@@ -90,10 +94,14 @@ export function NoteWorkspace({
   const [saveState, setSaveState] = useState<SaveState>(
     initialNote ? "saved" : "idle"
   )
+  const [lastSavedVersion, setLastSavedVersion] = useState(initialNote?.version ?? 0)
   const [lastSavedAt, setLastSavedAt] = useState(
     initialNote?.updatedAt ?? updatedAt
   )
+  const [hasPendingLocalChanges, setHasPendingLocalChanges] = useState(false)
+  const [syncMessage, setSyncMessage] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+  const [isRecoveryDialogOpen, setIsRecoveryDialogOpen] = useState(false)
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false)
   const [nextPassword, setNextPassword] = useState("")
   const [confirmNextPassword, setConfirmNextPassword] = useState("")
@@ -102,6 +110,10 @@ export function NoteWorkspace({
     null
   )
   const [isChangingPassword, setIsChangingPassword] = useState(false)
+  const [recoveryKeyEmail, setRecoveryKeyEmail] = useState("")
+  const [recoveryKeyError, setRecoveryKeyError] = useState<string | null>(null)
+  const [recoveryKeyMessage, setRecoveryKeyMessage] = useState<string | null>(null)
+  const [isEmailingRecoveryKey, setIsEmailingRecoveryKey] = useState(false)
 
   const editor = useEditor({
     immediatelyRender: false,
@@ -152,10 +164,13 @@ export function NoteWorkspace({
   const applyUnlockedNote = useCallback((note: NotePayload) => {
     setTitle(note.title)
     setNoteContent(note.content)
+    setLastSavedVersion(note.version)
     setLastSavedAt(note.updatedAt)
     setIsUnlocked(true)
     setDoesNoteExist(true)
     setAccessPassword("")
+    setHasPendingLocalChanges(false)
+    setSaveError(null)
     hydratedContentRef.current = false
   }, [])
 
@@ -172,23 +187,33 @@ export function NoteWorkspace({
         body: JSON.stringify({
           title: nextTitle,
           content: nextContent,
+          expectedVersion: lastSavedVersion,
         }),
       })
 
       const result = (await response.json().catch(() => null)) as
-        | { error?: string; note?: { updatedAt: string } }
+        | { error?: string; note?: NotePayload }
         | null
 
       if (!response.ok || !result?.note) {
+        if (response.status === 409 && result?.note) {
+          applyUnlockedNote(result.note)
+          setSyncMessage(
+            "A newer version from another tab or device was loaded before this save completed."
+          )
+        }
         setSaveState("error")
         setSaveError(result?.error ?? "Autosave failed. Try again in a moment.")
         return
       }
 
+      setLastSavedVersion(result.note.version)
       setLastSavedAt(result.note.updatedAt)
+      setHasPendingLocalChanges(false)
+      setSyncMessage(null)
       setSaveState("saved")
     },
-    [slug]
+    [applyUnlockedNote, lastSavedVersion, slug]
   )
 
   const scheduleSave = useCallback(
@@ -201,6 +226,7 @@ export function NoteWorkspace({
         window.clearTimeout(saveTimerRef.current)
       }
 
+      setHasPendingLocalChanges(true)
       saveTimerRef.current = window.setTimeout(() => {
         void persistNote(nextTitle, nextContent)
       }, 700)
@@ -238,6 +264,7 @@ export function NoteWorkspace({
       setIsUnlocking(false)
       setSaveState("saved")
       setPasswordChangeMessage(null)
+      setSyncMessage(null)
       router.refresh()
     },
     [applyUnlockedNote, router, slug]
@@ -256,7 +283,7 @@ export function NoteWorkspace({
         body: JSON.stringify({
           slug,
           password,
-          recoveryEmail,
+          recoveryEmail: recoveryEnabled ? recoveryEmail : "",
         }),
       })
 
@@ -279,19 +306,76 @@ export function NoteWorkspace({
       setIsUnlocking(false)
       setSaveState("saved")
       setPasswordChangeMessage(null)
+      setSyncMessage(null)
       router.refresh()
     },
-    [applyUnlockedNote, recoveryEmail, router, slug]
+    [applyUnlockedNote, recoveryEmail, recoveryEnabled, router, slug]
   )
+
+  const refreshLatestNote = useCallback(async () => {
+    if (!isUnlocked || hasPendingLocalChanges || saveState === "saving") {
+      return
+    }
+
+    const response = await fetch(`/api/notes/${slug}`, {
+      method: "GET",
+      cache: "no-store",
+    })
+
+    const result = (await response.json().catch(() => null)) as
+      | { error?: string; note?: NotePayload }
+      | null
+
+    if (!response.ok || !result?.note) {
+      return
+    }
+
+    if (result.note.version !== lastSavedVersion) {
+      applyUnlockedNote(result.note)
+      setSaveState("saved")
+      setSyncMessage("Latest changes from another tab or device were loaded.")
+    }
+  }, [
+    applyUnlockedNote,
+    hasPendingLocalChanges,
+    isUnlocked,
+    lastSavedVersion,
+    saveState,
+    slug,
+  ])
 
   useEffect(() => {
     if (!editor || !isUnlocked) {
       return
     }
 
-    editor.commands.setContent(noteContent)
+    editor.commands.setContent(noteContent, { emitUpdate: false })
     hydratedContentRef.current = true
   }, [editor, isUnlocked, noteContent])
+
+  useEffect(() => {
+    if (!isUnlocked) {
+      return
+    }
+
+    function onFocus() {
+      void refreshLatestNote()
+    }
+
+    function onVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        void refreshLatestNote()
+      }
+    }
+
+    window.addEventListener("focus", onFocus)
+    document.addEventListener("visibilitychange", onVisibilityChange)
+
+    return () => {
+      window.removeEventListener("focus", onFocus)
+      document.removeEventListener("visibilitychange", onVisibilityChange)
+    }
+  }, [isUnlocked, refreshLatestNote])
 
   useEffect(() => {
     return () => {
@@ -359,7 +443,47 @@ export function NoteWorkspace({
     setPasswordChangeMessage("Password updated. Auth cookie and note encryption were rotated.")
     setIsChangingPassword(false)
     setIsPasswordDialogOpen(false)
+    setHasPendingLocalChanges(false)
+    setSyncMessage(null)
     router.refresh()
+  }
+
+  async function handleRecoveryKeyRotation() {
+    if (!recoveryEnabled) {
+      return
+    }
+
+    setIsEmailingRecoveryKey(true)
+    setRecoveryKeyError(null)
+    setRecoveryKeyMessage(null)
+
+    const response = await fetch(`/api/notes/${slug}/recovery-key`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        recoveryEmail: recoveryKeyEmail,
+      }),
+    })
+
+    const result = (await response.json().catch(() => null)) as
+      | { error?: string; message?: string; recoveryEmail?: string }
+      | null
+
+    if (!response.ok || !result?.message || !result.recoveryEmail) {
+      setIsEmailingRecoveryKey(false)
+      setRecoveryKeyError(
+        result?.error ?? "We couldn’t email a new recovery key right now."
+      )
+      return
+    }
+
+    setRecoveryKeyMessage(`${result.message} Sent to ${result.recoveryEmail}.`)
+    setRecoveryKeyEmail("")
+    setRecoveryKeyError(null)
+    setIsEmailingRecoveryKey(false)
+    setIsRecoveryDialogOpen(false)
   }
 
   async function lockNote() {
@@ -375,7 +499,12 @@ export function NoteWorkspace({
     setIsUnlocked(false)
     setUnlockError(null)
     setSaveState("idle")
+    setSaveError(null)
+    setSyncMessage(null)
+    setHasPendingLocalChanges(false)
     setPasswordChangeMessage(null)
+    setRecoveryKeyMessage(null)
+    setRecoveryKeyError(null)
     hydratedContentRef.current = false
     router.refresh()
   }
@@ -435,20 +564,22 @@ export function NoteWorkspace({
                 }}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="claim-recovery-email">Recovery email (Optional)</Label>
-              <Input
-                id="claim-recovery-email"
-                type="email"
-                value={recoveryEmail}
-                placeholder="you@example.com"
-                onChange={(event) => setRecoveryEmail(event.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                A one-time recovery key will be emailed now. The app cannot
-                resend or reconstruct that key later.
-              </p>
-            </div>
+            {recoveryEnabled ? (
+              <div className="space-y-2">
+                <Label htmlFor="claim-recovery-email">Recovery email (Optional)</Label>
+                <Input
+                  id="claim-recovery-email"
+                  type="email"
+                  value={recoveryEmail}
+                  placeholder="you@example.com"
+                  onChange={(event) => setRecoveryEmail(event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  A recovery key will be emailed now. After you unlock the note
+                  later, you can email a fresh recovery key if needed.
+                </p>
+              </div>
+            ) : null}
             <Button
               size="lg"
               className="w-full"
@@ -513,9 +644,11 @@ export function NoteWorkspace({
               This URL exists, but content stays hidden until the matching
               password is entered. Successful access is cached in a secure `httpOnly` cookie instead of local storage.
             </p>
-            <Button asChild type="button" variant="outline">
-              <Link href={`/recover?slug=${slug}`}>Recover with emailed key</Link>
-            </Button>
+            {recoveryEnabled ? (
+              <Button asChild type="button" variant="outline">
+                <Link href={`/recover?slug=${slug}`}>Recover with emailed key</Link>
+              </Button>
+            ) : null}
             {unlockError ? (
               <Alert variant="destructive">
                 <AlertDescription>{unlockError}</AlertDescription>
@@ -551,6 +684,70 @@ export function NoteWorkspace({
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
+            {recoveryEnabled ? (
+              <Dialog
+                open={isRecoveryDialogOpen}
+                onOpenChange={(open) => {
+                  setIsRecoveryDialogOpen(open)
+                  if (!open) {
+                    setRecoveryKeyEmail("")
+                    setRecoveryKeyError(null)
+                  }
+                }}
+              >
+                <DialogTrigger asChild>
+                  <Button variant="outline">
+                    <Mail />
+                    Email new recovery key
+                  </Button>
+                </DialogTrigger>
+                <DialogContent>
+                  <DialogHeader>
+                    <DialogTitle>Email a new recovery key</DialogTitle>
+                    <DialogDescription>
+                      TinyNotes does not store your original recovery key, so it
+                      cannot resend it. This will generate a new recovery key,
+                      email it, and invalidate the previous one.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="recovery-email-rotate">Recovery email</Label>
+                      <Input
+                        id="recovery-email-rotate"
+                        type="email"
+                        value={recoveryKeyEmail}
+                        placeholder="Leave blank to reuse the current recovery email"
+                        onChange={(event) => setRecoveryKeyEmail(event.target.value)}
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Enter a new email to replace the existing recovery email,
+                        or leave this blank to reuse the current one.
+                      </p>
+                    </div>
+                    {recoveryKeyError ? (
+                      <Alert variant="destructive">
+                        <AlertDescription>{recoveryKeyError}</AlertDescription>
+                      </Alert>
+                    ) : null}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      onClick={() => setIsRecoveryDialogOpen(false)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      disabled={isEmailingRecoveryKey}
+                      onClick={() => void handleRecoveryKeyRotation()}
+                    >
+                      {isEmailingRecoveryKey ? "Emailing..." : "Email new key"}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            ) : null}
             <Dialog
               open={isPasswordDialogOpen}
               onOpenChange={(open) => {
@@ -732,6 +929,18 @@ export function NoteWorkspace({
             <Alert>
               <AlertTitle>Password changed</AlertTitle>
               <AlertDescription>{passwordChangeMessage}</AlertDescription>
+            </Alert>
+          ) : null}
+          {recoveryEnabled && recoveryKeyMessage ? (
+            <Alert>
+              <AlertTitle>Recovery key rotated</AlertTitle>
+              <AlertDescription>{recoveryKeyMessage}</AlertDescription>
+            </Alert>
+          ) : null}
+          {syncMessage ? (
+            <Alert>
+              <AlertTitle>Synced latest copy</AlertTitle>
+              <AlertDescription>{syncMessage}</AlertDescription>
             </Alert>
           ) : null}
           {saveError ? (

@@ -1,4 +1,4 @@
-# Notes Everywhere
+# TinyNotes
 
 Anonymous rich-text notes with user-chosen tiny slugs, password-based access, and autosave.
 
@@ -46,15 +46,18 @@ Legacy plaintext notes from earlier local runs are automatically migrated to enc
 - Netlify's current Next.js support uses the OpenNext adapter automatically, which turns App Router SSR and route handlers into Netlify Functions.
 - Set `DATABASE_URL` in Netlify to your Neon connection string.
 - Set `AUTH_COOKIE_SECRET` in Netlify to a long random secret for encrypted auth cookies.
-- Set Mailjet env vars in Netlify: `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `MAILJET_FROM_EMAIL`, and optionally `MAILJET_FROM_NAME`.
+- Set `RECOVERY_FEATURE_ENABLED="true"` in Netlify only if you want email recovery enabled.
+- If recovery is enabled, also set Mailjet env vars in Netlify: `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `MAILJET_FROM_EMAIL`, and optionally `MAILJET_FROM_NAME`.
 - If you install the Neon integration/plugin in Netlify, let it manage the production `DATABASE_URL`.
 
 ## Recovery flow
 
-- Recovery email is optional and is set when the note is first created.
-- If recovery email is provided, the server emails a one-time recovery key exactly once at creation time.
+- Recovery is hidden unless `RECOVERY_FEATURE_ENABLED="true"`.
+- Recovery email is optional and can be set when the note is first created or replaced later after password-authenticated access.
+- If recovery email is provided, the server emails a one-time recovery key at note creation.
 - The database stores only a recovery-key-wrapped copy of the note key, not the plaintext recovery key.
-- Later recovery requires the note slug plus the recovery key from that original email.
+- Later recovery requires the note slug plus the latest recovery key email.
+- After unlocking a note with its password, the user can rotate and email a fresh recovery key. The previous recovery key is invalidated.
 - Recovery emails are delivered through Nodemailer using Mailjet SMTP credentials from env vars.
 
 ## Security note

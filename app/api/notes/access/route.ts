@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 
 import { attachNoteAccessCookie } from "@/lib/note-auth-session"
+import { isRecoveryFeatureEnabled } from "@/lib/features"
 import { createOrOpenNote, deleteNoteBySlug } from "@/lib/notes"
 import { sendRecoveryKeyEmail } from "@/lib/recovery"
 import { accessNoteSchema } from "@/lib/validation"
@@ -21,10 +22,11 @@ export async function POST(request: Request) {
   }
 
   const { slug, password, recoveryEmail } = parsed.data
+  const recoveryEnabled = isRecoveryFeatureEnabled()
   const result = await createOrOpenNote(
     slug,
     password,
-    recoveryEmail || undefined
+    recoveryEnabled ? recoveryEmail || undefined : undefined
   )
 
   if (result.status === "forbidden") {
@@ -36,7 +38,12 @@ export async function POST(request: Request) {
     )
   }
 
-  if (result.status === "created" && recoveryEmail && result.recoveryKey) {
+  if (
+    recoveryEnabled &&
+    result.status === "created" &&
+    recoveryEmail &&
+    result.recoveryKey
+  ) {
     try {
       await sendRecoveryKeyEmail({
         recoveryEmail,

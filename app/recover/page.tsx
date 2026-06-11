@@ -1,10 +1,17 @@
+import { notFound } from "next/navigation"
+
 import { RecoverNoteForm } from "@/app/recover/recover-note-form"
+import { isRecoveryFeatureEnabled } from "@/lib/features"
 
 export default async function RecoverPage({
   searchParams,
 }: {
   searchParams: Promise<{ slug?: string }>
 }) {
+  if (!isRecoveryFeatureEnabled()) {
+    notFound()
+  }
+
   const { slug } = await searchParams
 
   return (

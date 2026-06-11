@@ -21,6 +21,42 @@ type RouteContext = {
   params: Promise<{ slug: string }>
 }
 
+export async function GET(_request: Request, context: RouteContext) {
+  const { slug } = await context.params
+  const slugResult = slugSchema.safeParse(slug)
+
+  if (!slugResult.success) {
+    return NextResponse.json({ error: "Invalid slug." }, { status: 400 })
+  }
+
+  const session = await readNoteAccessSession()
+  const password = getNotePasswordFromSession(session, slugResult.data)
+
+  if (!password) {
+    return NextResponse.json(
+      { error: "This note is not unlocked in your current session." },
+      { status: 401 }
+    )
+  }
+
+  const result = await unlockNote(slugResult.data, password)
+
+  if (result.status === "missing") {
+    return NextResponse.json({ error: "Note not found." }, { status: 404 })
+  }
+
+  if (result.status === "forbidden") {
+    return NextResponse.json(
+      { error: "That password did not match this note." },
+      { status: 401 }
+    )
+  }
+
+  return NextResponse.json({
+    note: result.note,
+  })
+}
+
 export async function POST(request: Request, context: RouteContext) {
   const { slug } = await context.params
   const slugResult = slugSchema.safeParse(slug)
@@ -97,7 +133,8 @@ export async function PUT(request: Request, context: RouteContext) {
     slugResult.data,
     password,
     parsed.data.title,
-    parsed.data.content as RichTextContent
+    parsed.data.content as RichTextContent,
+    parsed.data.expectedVersion
   )
 
   if (result.status === "missing") {
@@ -108,6 +145,17 @@ export async function PUT(request: Request, context: RouteContext) {
     return NextResponse.json(
       { error: "That password did not match this note." },
       { status: 401 }
+    )
+  }
+
+  if (result.status === "conflict") {
+    return NextResponse.json(
+      {
+        error:
+          "This note changed in another tab or device. Reloading the latest copy is required before saving.",
+        note: result.note,
+      },
+      { status: 409 }
     )
   }
 

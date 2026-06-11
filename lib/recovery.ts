@@ -42,7 +42,7 @@ export async function sendRecoveryKeyEmail({
 }) {
   const transport = getRecoveryTransport()
   const from = process.env.MAILJET_FROM_EMAIL!
-  const fromName = process.env.MAILJET_FROM_NAME ?? "Notes Everywhere"
+  const fromName = process.env.MAILJET_FROM_NAME ?? "TinyNotes"
 
   await transport.sendMail({
     from: `"${fromName}" <${from}>`,

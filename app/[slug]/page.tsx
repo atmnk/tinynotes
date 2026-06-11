@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 
 import { AccessibleNotesSidebar } from "@/app/[slug]/_components/accessible-notes-sidebar"
 import { NoteWorkspace } from "@/app/[slug]/_components/note-workspace"
+import { isRecoveryFeatureEnabled } from "@/lib/features"
 import {
   getNotePasswordFromSession,
   readNoteAccessSession,
@@ -31,6 +32,7 @@ export default async function NotePage({
       ? await unlockNote(parsedSlug.data, sessionPassword)
       : null
   const accessibleNotes = await listAccessibleNotes(session.notes)
+  const recoveryEnabled = isRecoveryFeatureEnabled()
   const fallbackTitle = parsedSlug.data
     .split("-")
     .map((segment) => segment.charAt(0).toUpperCase() + segment.slice(1))
@@ -42,8 +44,8 @@ export default async function NotePage({
         currentSlug={parsedSlug.data}
         notes={accessibleNotes}
       />
-      <SidebarInset>
-        <main className="min-h-svh bg-[linear-gradient(180deg,oklch(0.985_0.01_95),oklch(0.965_0.005_220))] px-4 py-6 dark:bg-[linear-gradient(180deg,oklch(0.2_0.01_245),oklch(0.16_0.01_245))] md:px-6">
+      <SidebarInset className="md:rounded-2xl md:border md:border-border/60 md:bg-background/96 md:shadow-[0_20px_60px_oklch(0_0_0_/_0.22)]">
+        <main className="min-h-svh bg-[linear-gradient(180deg,oklch(0.99_0.008_95),oklch(0.97_0.01_220))] px-4 py-6 dark:bg-[linear-gradient(180deg,oklch(0.205_0.014_245),oklch(0.165_0.014_245))] md:px-6">
           <NoteWorkspace
             slug={parsedSlug.data}
             initialTitle={initialUnlock?.status === "ok" ? initialUnlock.note.title : fallbackTitle}
@@ -54,6 +56,7 @@ export default async function NotePage({
             }
             noteExists={Boolean(note)}
             initialNote={initialUnlock?.status === "ok" ? initialUnlock.note : null}
+            recoveryEnabled={recoveryEnabled}
           />
         </main>
       </SidebarInset>

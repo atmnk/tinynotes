@@ -3,12 +3,14 @@ import { ensureSchema, getDb } from "@/lib/db"
 import { createRandomSecret, decryptString, encryptString } from "@/lib/encryption"
 import type { NoteAccessEntry } from "@/lib/note-auth-session"
 import { hashPassword, verifyPassword } from "@/lib/password"
+import { normalizeRecoveryEmail } from "@/lib/recovery"
 
 type NoteRow = {
   slug: string
   title: unknown
   password_hash: string
   content: unknown
+  version: number
   note_key_password: string | null
   note_key_recovery: string | null
   recovery_email: string | null
@@ -24,12 +26,19 @@ export type NoteRecord = {
   slug: string
   title: string
   content: RichTextContent
+  version: number
   createdAt: string
   updatedAt: string
 }
 
+export type RecoveryKeyRotationRollback = {
+  slug: string
+  recoveryEmail: string | null
+  wrappedRecoveryKey: string | null
+}
+
 function toNoteRecord(
-  row: Pick<NoteRow, "slug" | "created_at" | "updated_at">,
+  row: Pick<NoteRow, "slug" | "version" | "created_at" | "updated_at">,
   title: string,
   content: RichTextContent
 ) {
@@ -37,6 +46,7 @@ function toNoteRecord(
     slug: row.slug,
     title,
     content,
+    version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -52,6 +62,7 @@ async function getNoteRow(slug: string) {
       title,
       password_hash,
       content,
+      version,
       note_key_password,
       note_key_recovery,
       recovery_email,
@@ -222,8 +233,8 @@ export async function getNoteShell(slug: string) {
   await ensureSchema()
   const sql = getDb()
 
-  const rows = await sql<Pick<NoteRow, "slug" | "updated_at">[]>`
-    SELECT slug, updated_at
+  const rows = await sql<Pick<NoteRow, "slug" | "version" | "updated_at">[]>`
+    SELECT slug, version, updated_at
     FROM notes
     WHERE slug = ${slug}
     LIMIT 1
@@ -253,6 +264,7 @@ export async function createOrOpenNote(
         title,
         password_hash,
         content,
+        version,
         note_key_password,
         note_key_recovery
       )
@@ -261,6 +273,7 @@ export async function createOrOpenNote(
         ${encrypted.title},
         ${hashPassword(password)},
         ${sql.json(encrypted.content)},
+        0,
         ${wrapNoteKeyWithPassword(password, noteKey)},
         ${recoveryKey ? wrapNoteKeyWithRecoveryKey(recoveryKey, noteKey) : null}
       )
@@ -269,6 +282,7 @@ export async function createOrOpenNote(
         title,
         password_hash,
         content,
+        version,
         note_key_password,
         note_key_recovery,
         recovery_email,
@@ -333,7 +347,8 @@ export async function saveNote(
   slug: string,
   password: string,
   title: string,
-  content: RichTextContent
+  content: RichTextContent,
+  expectedVersion?: number
 ) {
   const row = await getNoteRow(slug)
 
@@ -361,13 +376,17 @@ export async function saveNote(
     SET
       title = ${encrypted.title},
       content = ${sql.json(encrypted.content)},
+      version = version + 1,
       updated_at = NOW()
-    WHERE slug = ${slug}
+    WHERE
+      slug = ${slug}
+      ${expectedVersion !== undefined ? sql`AND version = ${expectedVersion}` : sql``}
     RETURNING
       slug,
       title,
       password_hash,
       content,
+      version,
       note_key_password,
       note_key_recovery,
       recovery_email,
@@ -378,6 +397,31 @@ export async function saveNote(
       created_at,
       updated_at
   `
+
+  if (rows.length === 0) {
+    const latestRow = await getNoteRow(slug)
+
+    if (!latestRow) {
+      return {
+        status: "missing" as const,
+        note: null,
+      }
+    }
+
+    const latestUnlocked = await unlockRowWithPassword(latestRow, password)
+
+    if (latestUnlocked.status !== "ok") {
+      return {
+        status: "forbidden" as const,
+        note: null,
+      }
+    }
+
+    return {
+      status: "conflict" as const,
+      note: latestUnlocked.note,
+    }
+  }
 
   return {
     status: "ok" as const,
@@ -415,6 +459,7 @@ export async function changeNotePassword(
     SET
       password_hash = ${hashPassword(newPassword)},
       note_key_password = ${wrapNoteKeyWithPassword(newPassword, unlocked.noteKey!)},
+      version = version + 1,
       updated_at = NOW()
     WHERE slug = ${slug}
     RETURNING
@@ -422,6 +467,7 @@ export async function changeNotePassword(
       title,
       password_hash,
       content,
+      version,
       note_key_password,
       note_key_recovery,
       recovery_email,
@@ -472,6 +518,7 @@ export async function recoverNoteWithRecoveryKey(
     SET
       password_hash = ${hashPassword(newPassword)},
       note_key_password = ${wrapNoteKeyWithPassword(newPassword, noteKey)},
+      version = version + 1,
       updated_at = NOW()
     WHERE slug = ${slug}
     RETURNING
@@ -479,6 +526,7 @@ export async function recoverNoteWithRecoveryKey(
       title,
       password_hash,
       content,
+      version,
       note_key_password,
       note_key_recovery,
       recovery_email,
@@ -494,6 +542,85 @@ export async function recoverNoteWithRecoveryKey(
     status: "ok" as const,
     note: toNoteRecord(rows[0], decrypted.title, decrypted.content),
   }
+}
+
+export async function rotateRecoveryKey(
+  slug: string,
+  password: string,
+  recoveryEmail?: string
+) {
+  const row = await getNoteRow(slug)
+
+  if (!row) {
+    return {
+      status: "missing" as const,
+      recoveryKey: null,
+      recoveryEmail: null,
+      rollback: null,
+    }
+  }
+
+  const unlocked = await unlockRowWithPassword(row, password)
+
+  if (unlocked.status !== "ok") {
+    return {
+      status: "forbidden" as const,
+      recoveryKey: null,
+      recoveryEmail: null,
+      rollback: null,
+    }
+  }
+
+  const nextRecoveryEmail = recoveryEmail
+    ? normalizeRecoveryEmail(recoveryEmail)
+    : row.recovery_email
+
+  if (!nextRecoveryEmail) {
+    return {
+      status: "requires_email" as const,
+      recoveryKey: null,
+      recoveryEmail: null,
+      rollback: null,
+    }
+  }
+
+  const recoveryKey = createRandomSecret(24)
+  const wrappedRecoveryKey = wrapNoteKeyWithRecoveryKey(recoveryKey, unlocked.noteKey!)
+  const sql = getDb()
+
+  await sql`
+    UPDATE notes
+    SET
+      recovery_email = ${nextRecoveryEmail},
+      note_key_recovery = ${wrappedRecoveryKey}
+    WHERE slug = ${slug}
+  `
+
+  return {
+    status: "ok" as const,
+    recoveryKey,
+    recoveryEmail: nextRecoveryEmail,
+    rollback: {
+      slug,
+      recoveryEmail: row.recovery_email,
+      wrappedRecoveryKey: row.note_key_recovery,
+    } satisfies RecoveryKeyRotationRollback,
+  }
+}
+
+export async function rollbackRecoveryKeyRotation(
+  rollback: RecoveryKeyRotationRollback
+) {
+  await ensureSchema()
+  const sql = getDb()
+
+  await sql`
+    UPDATE notes
+    SET
+      recovery_email = ${rollback.recoveryEmail},
+      note_key_recovery = ${rollback.wrappedRecoveryKey}
+    WHERE slug = ${rollback.slug}
+  `
 }
 
 export async function deleteNoteBySlug(slug: string) {

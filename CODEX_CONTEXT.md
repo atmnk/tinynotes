@@ -4,6 +4,8 @@ Keep this file up to date as the project evolves. When important architectural, 
 
 ## Product shape
 
+- User-facing product name is `TinyNotes`.
+- Repository/project technical name may still differ from the product name.
 - This project is an anonymous note-taking app.
 - Users choose their own tiny URL slug and a password.
 - Very short slugs, including single-character slugs like `/a`, are valid.
@@ -14,6 +16,8 @@ Keep this file up to date as the project evolves. When important architectural, 
 - Users should be able to optionally attach a recovery email when creating a note.
 - If recovery email is provided, the app should send a one-time recovery key by email at creation time.
 - Later recovery should require the slug plus that recovery key from the original email.
+- After password-authenticated access, the user can rotate and email a fresh recovery key. The old recovery key is not stored and cannot be resent verbatim.
+- All email recovery related UI, routes, and behavior must be hidden behind `RECOVERY_FEATURE_ENABLED`.
 - Notes autosave while the user edits.
 - Notes support rich text formatting.
 
@@ -53,10 +57,14 @@ Keep this file up to date as the project evolves. When important architectural, 
 - Note pages live at `app/[slug]`.
 - Unlocking a note happens client-side by posting the password to `/api/notes/[slug]`.
 - Autosave writes title and rich-text content back through `PUT /api/notes/[slug]`.
+- Autosave concurrency should use a database-backed monotonically increasing `version` field, not timestamp string equality.
+- When a note tab regains focus, the client should fetch the latest server copy before allowing further edits if another tab or device has changed the note.
+- Programmatic editor refreshes must not trigger autosave by themselves.
 - Password rotation uses `PATCH /api/notes/[slug]`.
 - Recovery password resets use `POST /api/recovery`.
 - The current editor stack is TipTap with StarterKit and Placeholder.
 - The note page uses a shadcn sidebar to show notes currently accessible in this browser session from the auth cookie.
+- The home page should also use the left sidebar to show all notes accessible in the current browser session, with landing-page feature content in the main pane when no note is selected.
 - Local database bootstrap lives in `docker-compose.yml`.
 - Netlify deployment defaults live in `netlify.toml`.
 
