@@ -103,7 +103,7 @@ export default async function Page() {
                     <div className="relative space-y-6">
                       <div className="space-y-3">
                         <Badge variant="secondary" className="w-fit">
-                          Designed for direct access
+                          Designed for quick access
                         </Badge>
                         <h1 className="max-w-4xl text-4xl leading-tight font-semibold tracking-tight text-balance md:text-6xl">
                           Write first. Share the link. Keep the password.
