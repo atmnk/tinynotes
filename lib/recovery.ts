@@ -1,6 +1,6 @@
 import "server-only"
 
-import nodemailer from "nodemailer"
+import { BrevoClient } from "@getbrevo/brevo"
 
 export const recoveryEmailSchemaDescription =
   "Recovery email must be a valid email address."
@@ -9,26 +9,20 @@ export function normalizeRecoveryEmail(email: string) {
   return email.trim().toLowerCase()
 }
 
-function getRecoveryTransport() {
-  const user = process.env.MAILJET_API_KEY
-  const pass = process.env.MAILJET_SECRET_KEY
-  const from = process.env.MAILJET_FROM_EMAIL
+let recoveryMailClient: BrevoClient | null = null
 
-  if (!user || !pass || !from) {
-    throw new Error(
-      "MAILJET_API_KEY, MAILJET_SECRET_KEY, and MAILJET_FROM_EMAIL must be configured."
-    )
+function getRecoveryMailClient() {
+  const apiKey = process.env.BREVO_API_KEY
+
+  if (!apiKey) {
+    throw new Error("BREVO_API_KEY must be configured.")
   }
 
-  return nodemailer.createTransport({
-    host: process.env.MAILJET_SMTP_HOST ?? "in-v3.mailjet.com",
-    port: Number(process.env.MAILJET_SMTP_PORT ?? "587"),
-    secure: false,
-    auth: {
-      user,
-      pass,
-    },
-  })
+  if (!recoveryMailClient) {
+    recoveryMailClient = new BrevoClient({ apiKey })
+  }
+
+  return recoveryMailClient
 }
 
 export async function sendRecoveryKeyEmail({
@@ -40,15 +34,22 @@ export async function sendRecoveryKeyEmail({
   recoveryKey: string
   slug: string
 }) {
-  const transport = getRecoveryTransport()
-  const from = process.env.MAILJET_FROM_EMAIL!
-  const fromName = process.env.MAILJET_FROM_NAME ?? "TinyNotes"
+  const client = getRecoveryMailClient()
+  const from = process.env.BREVO_FROM_EMAIL
+  const fromName = process.env.BREVO_FROM_NAME ?? "TinyNotes"
 
-  await transport.sendMail({
-    from: `"${fromName}" <${from}>`,
-    to: recoveryEmail,
+  if (!from) {
+    throw new Error("BREVO_FROM_EMAIL must be configured.")
+  }
+
+  await client.transactionalEmails.sendTransacEmail({
+    sender: {
+      email: from,
+      name: fromName,
+    },
+    to: [{ email: recoveryEmail }],
     subject: `Your recovery key for /${slug}`,
-    text: [
+    textContent: [
       `Your note /${slug} was created with zero-knowledge recovery enabled.`,
       "",
       "Store this recovery key safely. It is sent only once in this email.",
@@ -56,7 +57,7 @@ export async function sendRecoveryKeyEmail({
       "",
       "If you lose both your password and this recovery key, the note cannot be recovered.",
     ].join("\n"),
-    html: [
+    htmlContent: [
       `<p>Your note <strong>/${slug}</strong> was created with zero-knowledge recovery enabled.</p>`,
       `<p>Store this recovery key safely. It is sent only once in this email.</p>`,
       `<p><code>${recoveryKey}</code></p>`,

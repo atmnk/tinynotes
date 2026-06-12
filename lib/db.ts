@@ -22,6 +22,7 @@ export function getDb() {
     globalThis.__notesEverywhereDb = postgres(getDatabaseUrl(), {
       idle_timeout: 20,
       max: 1,
+      onnotice: () => {},
       prepare: false,
     })
   }

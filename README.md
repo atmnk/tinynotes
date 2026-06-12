@@ -48,7 +48,7 @@ Legacy plaintext notes from earlier local runs are automatically migrated to enc
 - Netlify Database manages the production connection via `NETLIFY_DB_URL`.
 - Set `AUTH_COOKIE_SECRET` in Netlify to a long random secret for encrypted auth cookies.
 - Set `RECOVERY_FEATURE_ENABLED="true"` in Netlify only if you want email recovery enabled.
-- If recovery is enabled, also set Mailjet env vars in Netlify: `MAILJET_API_KEY`, `MAILJET_SECRET_KEY`, `MAILJET_FROM_EMAIL`, and optionally `MAILJET_FROM_NAME`.
+- If recovery is enabled, also set Brevo env vars in Netlify: `BREVO_API_KEY`, `BREVO_FROM_EMAIL`, and optionally `BREVO_FROM_NAME`.
 - Author schema changes in `netlify/database/migrations/` and deploy them through Netlify.
 
 ## Recovery flow
@@ -59,7 +59,7 @@ Legacy plaintext notes from earlier local runs are automatically migrated to enc
 - The database stores only a recovery-key-wrapped copy of the note key, not the plaintext recovery key.
 - Later recovery requires the note slug plus the latest recovery key email.
 - After unlocking a note with its password, the user can rotate and email a fresh recovery key. The previous recovery key is invalidated.
-- Recovery emails are delivered through Nodemailer using Mailjet SMTP credentials from env vars.
+- Recovery emails are delivered through the Brevo transactional email API using the official Brevo Node SDK and env vars.
 
 ## Security note
 

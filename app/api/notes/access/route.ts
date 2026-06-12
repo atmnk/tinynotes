@@ -61,7 +61,12 @@ export async function POST(request: Request) {
         recoveryKey: result.recoveryKey,
         slug,
       })
-    } catch {
+    } catch (error) {
+      console.error("Failed to send recovery key email during note creation.", {
+        slug,
+        error,
+      })
+
       await deleteNoteBySlug(slug)
 
       return NextResponse.json(

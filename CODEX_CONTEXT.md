@@ -51,7 +51,7 @@ Keep this file up to date as the project evolves. When important architectural, 
 - Passwords are hashed with Node `crypto.scrypt`, not stored in plaintext.
 - Note title and note content are encrypted at rest with the user password, and password changes should re-encrypt stored note data with the new password.
 - Do not store note passwords in local storage. Browser note access should be cached in secure `httpOnly` encrypted cookies instead.
-- Recovery email delivery is done with Nodemailer + Mailjet SMTP env vars.
+- Recovery email delivery is done through the Brevo transactional email API using the official Brevo Node SDK.
 - Do not introduce any server-held master recovery secret that can decrypt user notes.
 
 ## Current implementation notes
