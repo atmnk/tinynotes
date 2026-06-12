@@ -517,7 +517,7 @@ export function NoteWorkspace({
 
   if (isUnlocking) {
     return (
-      <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <div className="flex w-full flex-col gap-4 overflow-y-auto">
         <Skeleton className="h-20 w-full" />
         <Skeleton className="h-[420px] w-full" />
       </div>
@@ -526,7 +526,7 @@ export function NoteWorkspace({
 
   if (isUnlocked && !editor) {
     return (
-      <div className="mx-auto flex max-w-5xl flex-col gap-4">
+      <div className="flex w-full flex-col gap-4 overflow-y-auto">
         <Skeleton className="h-20 w-full" />
         <Skeleton className="h-[420px] w-full" />
       </div>
@@ -535,7 +535,7 @@ export function NoteWorkspace({
 
   if (!doesNoteExist && !isUnlocked) {
     return (
-      <div className="mx-auto flex max-w-xl flex-col gap-4 pt-10">
+      <div className="mx-auto flex max-w-xl flex-col gap-4 overflow-y-auto pt-10">
         <Button asChild variant="ghost" className="w-fit">
           <Link href="/">
             <ArrowLeft />
@@ -627,7 +627,7 @@ export function NoteWorkspace({
 
   if (!isUnlocked) {
     return (
-      <div className="mx-auto flex max-w-xl flex-col gap-4 pt-10">
+      <div className="mx-auto flex max-w-xl flex-col gap-4 overflow-y-auto pt-10">
         <Button asChild variant="ghost" className="w-fit">
           <Link href="/">
             <ArrowLeft />
@@ -709,8 +709,8 @@ export function NoteWorkspace({
   const activeEditor = editor!
 
   return (
-    <div className="mx-auto flex max-w-5xl flex-col gap-4">
-      <Card className="border-border/70 bg-background/88 backdrop-blur">
+    <div className="flex min-h-0 flex-1 flex-col gap-4">
+      <Card className="shrink-0 border-border/70 bg-background/88 backdrop-blur">
         <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
           <div className="space-y-2">
             <div className="flex flex-wrap items-center gap-2">
@@ -879,8 +879,8 @@ export function NoteWorkspace({
         </CardContent>
       </Card>
 
-      <Card className="border-border/70 bg-background/96 shadow-lg">
-        <CardHeader className="gap-4">
+      <Card className="flex min-h-0 flex-1 flex-col border-border/70 bg-background/96 shadow-lg">
+        <CardHeader className="shrink-0 gap-4">
           <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
             <div className="space-y-2">
               <Label htmlFor="note-title">Title</Label>
@@ -969,8 +969,10 @@ export function NoteWorkspace({
             </Button>
           </div>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <EditorContent editor={editor} />
+        <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+          <div className="min-h-[360px] flex-1 overflow-hidden">
+            <EditorContent className="h-full" editor={editor} />
+          </div>
           {passwordChangeMessage ? (
             <Alert>
               <AlertTitle>Password changed</AlertTitle>

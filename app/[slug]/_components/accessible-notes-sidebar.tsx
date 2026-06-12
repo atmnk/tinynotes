@@ -46,9 +46,6 @@ export function AccessibleNotesSidebar({
             <p className="text-xs font-medium tracking-[0.18em] text-sidebar-foreground/70 uppercase">
               TinyNotes
             </p>
-            <p className="mt-1 text-sm text-sidebar-foreground/80">
-              Accessible notes in this browser session
-            </p>
           </div>
           <SidebarTrigger
             variant="outline"

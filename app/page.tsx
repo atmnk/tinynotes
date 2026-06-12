@@ -83,7 +83,7 @@ export default async function Page() {
       <AccessibleNotesSidebar currentSlug={null} notes={accessibleNotes} />
       <SidebarInset className="md:rounded-2xl md:border md:border-border/60 md:bg-background/96 md:shadow-[0_20px_60px_oklch(0_0_0_/_0.12)]">
         <main className="min-h-svh bg-[radial-gradient(circle_at_top_left,_oklch(0.97_0.03_215),_transparent_26%),linear-gradient(180deg,oklch(0.985_0.004_95),oklch(0.965_0.008_220))] px-4 py-4 md:px-6">
-          <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
+          <div className="flex w-full flex-col gap-6">
             <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/78 px-4 py-3 shadow-sm backdrop-blur">
               <div className="flex flex-wrap items-center gap-3">
                 <SidebarTrigger variant="outline" size="icon-sm" />

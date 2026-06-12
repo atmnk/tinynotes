@@ -137,7 +137,7 @@
 
 @layer components {
   .tiptap {
-    @apply min-h-[360px] rounded-none border border-border/70 bg-background px-4 py-4 text-sm leading-7 shadow-sm outline-none;
+    @apply h-full min-h-[360px] overflow-y-auto rounded-none border border-border/70 bg-background px-4 py-4 text-sm leading-7 shadow-sm outline-none;
   }
 
   .tiptap p.is-editor-empty:first-child::before {
