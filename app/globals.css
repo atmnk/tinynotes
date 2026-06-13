@@ -129,16 +129,16 @@
     @apply border-border outline-ring/50;
     }
   body {
-    @apply bg-background text-foreground;
+    @apply h-full overflow-hidden bg-background text-foreground;
     }
   html {
-    @apply font-sans;
+    @apply h-full font-sans;
     }
 }
 
 @layer components {
   .tiptap {
-    @apply h-full min-h-[360px] overflow-y-auto rounded-none border border-border/70 bg-background px-4 py-4 text-sm leading-7 shadow-sm outline-none;
+    @apply h-full overflow-y-auto rounded-none border border-border/70 bg-background px-4 py-4 text-sm leading-7 shadow-sm outline-none;
   }
 
   .tiptap p.is-editor-empty:first-child::before {

@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Paper shadow -->
+  <rect x="6" y="4" width="17" height="22" rx="2.5" fill="#1a4d72" opacity="0.12"/>
+  <!-- Paper base -->
+  <rect x="5" y="3" width="17" height="22" rx="2.5" fill="#2e7db8"/>
+  <!-- Folded corner -->
+  <path d="M18 3 L22 7 L18 7 Z" fill="#1a4d72" opacity="0.4"/>
+  <path d="M18 3 L22 7 L18 7 Z" fill="white" opacity="0.15"/>
+  <!-- Lines on paper -->
+  <rect x="8" y="10" width="9" height="1.5" rx="0.75" fill="white" opacity="0.75"/>
+  <rect x="8" y="13.5" width="7" height="1.5" rx="0.75" fill="white" opacity="0.55"/>
+  <rect x="8" y="17" width="5" height="1.5" rx="0.75" fill="white" opacity="0.35"/>
+  <!-- Pencil body -->
+  <g transform="rotate(-45 20 20)">
+    <rect x="17" y="17" width="9" height="3.5" rx="0.6" fill="#f5c842"/>
+    <rect x="17" y="17" width="2" height="3.5" rx="0.4" fill="#e8a820"/>
+    <!-- Pencil tip -->
+    <path d="M26 17.5 L27.8 19 L26 20.5 Z" fill="#d4845a"/>
+    <path d="M27.8 18.2 L29.2 19 L27.8 19.8 Z" fill="#2a2a2a"/>
+  </g>
+</svg>

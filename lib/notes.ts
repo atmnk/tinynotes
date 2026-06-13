@@ -675,6 +675,7 @@ export async function listAccessibleNotes(sessionNotes: NoteAccessEntry[]) {
         slug: unlocked.note.slug,
         title: unlocked.note.title,
         updatedAt: unlocked.note.updatedAt,
+        noteType: unlocked.note.noteType,
       }
     })
   )

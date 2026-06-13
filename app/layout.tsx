@@ -8,6 +8,9 @@ export const metadata: Metadata = {
   title: "TinyNotes",
   description:
     "TinyNotes is an anonymous password-protected note app with tiny slugs, rich text editing, and autosave.",
+  icons: {
+    icon: "/favicon.svg",
+  },
 }
 
 export default function RootLayout({

@@ -1589,7 +1589,7 @@ function MindmapCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative h-[520px] overflow-hidden rounded-xl border border-border/70 bg-background"
+      className="relative h-full overflow-hidden rounded-xl border border-border/70 bg-background"
       onClick={() => setContextNodeId(null)}
     >
       <ReactFlow

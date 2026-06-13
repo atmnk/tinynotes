@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Rounded square background using theme primary -->
+  <rect width="32" height="32" rx="7" fill="#2e7db8"/>
+  <!-- Paper -->
+  <rect x="7" y="5" width="13" height="17" rx="1.5" fill="white" opacity="0.95"/>
+  <!-- Fold corner -->
+  <path d="M16 5 L20 9 L16 9 Z" fill="#2e7db8" opacity="0.35"/>
+  <!-- Lines -->
+  <rect x="9" y="11" width="7" height="1.5" rx="0.75" fill="#2e7db8" opacity="0.55"/>
+  <rect x="9" y="14" width="5.5" height="1.5" rx="0.75" fill="#2e7db8" opacity="0.38"/>
+  <rect x="9" y="17" width="4" height="1.5" rx="0.75" fill="#2e7db8" opacity="0.25"/>
+  <!-- Pencil -->
+  <g transform="rotate(-45 18 18)">
+    <rect x="17" y="16" width="8" height="3" rx="0.5" fill="#f5c842"/>
+    <path d="M25 16.4 L27 17.5 L25 18.6 Z" fill="#d4845a"/>
+    <path d="M27 17 L28.2 17.5 L27 18 Z" fill="#1a1a1a"/>
+  </g>
+</svg>

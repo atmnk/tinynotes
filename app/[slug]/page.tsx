@@ -44,8 +44,8 @@ export default async function NotePage({
         currentSlug={parsedSlug.data}
         notes={accessibleNotes}
       />
-      <SidebarInset className="md:rounded-2xl md:border md:border-border/60 md:bg-background/96 md:shadow-[0_20px_60px_oklch(0_0_0_/_0.22)]">
-        <main className="flex h-svh flex-col overflow-hidden bg-[linear-gradient(180deg,oklch(0.99_0.008_95),oklch(0.97_0.01_220))] px-4 py-6 dark:bg-[linear-gradient(180deg,oklch(0.205_0.014_245),oklch(0.165_0.014_245))] md:px-6">
+      <SidebarInset>
+        <main className="flex h-svh flex-col overflow-hidden bg-[linear-gradient(180deg,oklch(0.99_0.008_95),oklch(0.97_0.01_220))] dark:bg-[linear-gradient(180deg,oklch(0.205_0.014_245),oklch(0.165_0.014_245))]">
           <NoteWorkspace
             slug={parsedSlug.data}
             initialTitle={initialUnlock?.status === "ok" ? initialUnlock.note.title : fallbackTitle}

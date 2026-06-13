@@ -15,7 +15,7 @@ import { readNoteAccessSession } from "@/lib/note-auth-session"
 import { listAccessibleNotes } from "@/lib/notes"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar"
+import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 
 const featureCards = [
   {
@@ -99,25 +99,23 @@ export default async function Page() {
   return (
     <SidebarProvider defaultOpen>
       <AccessibleNotesSidebar currentSlug={null} notes={accessibleNotes} />
-      <SidebarInset className="md:rounded-2xl md:border md:border-border/60 md:bg-background/96 md:shadow-[0_20px_60px_oklch(0_0_0_/_0.12)]">
-        <main className="min-h-svh bg-[radial-gradient(circle_at_top_left,_oklch(0.97_0.03_215),_transparent_26%),linear-gradient(180deg,oklch(0.985_0.004_95),oklch(0.965_0.008_220))] px-4 py-4 md:px-6">
+      <SidebarInset>
+        <main className="flex h-svh flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,oklch(0.97_0.03_215),transparent_26%),linear-gradient(180deg,oklch(0.985_0.004_95),oklch(0.965_0.008_220))] dark:bg-[linear-gradient(180deg,oklch(0.205_0.014_245),oklch(0.165_0.014_245))]">
+          {/* Top bar — flush, matches content padding */}
+          <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/70 bg-background/88 px-4 backdrop-blur md:px-6">
+            <Badge variant="outline">TinyNotes</Badge>
+            <span className="text-xs text-muted-foreground">Private notes at memorable links</span>
+            <Badge variant="secondary" className="ml-auto hidden sm:flex">Anonymous · Password protected · Autosaved</Badge>
+          </div>
+
+          <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 py-4 md:px-6">
           <div className="flex w-full flex-col gap-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-border/60 bg-background/78 px-4 py-3 shadow-sm backdrop-blur">
-              <div className="flex flex-wrap items-center gap-3">
-                <SidebarTrigger variant="outline" size="icon-sm" />
-                <Badge variant="outline">TinyNotes</Badge>
-                <p className="text-sm text-muted-foreground">
-                  Private notes at memorable links
-                </p>
-              </div>
-              <Badge variant="secondary">Anonymous. Password protected. Autosaved.</Badge>
-            </div>
 
             <div className="grid gap-6 lg:grid-cols-[minmax(0,1.1fr)_390px]">
               <section className="space-y-6">
                 <Card className="overflow-hidden border-border/60 bg-background/82 shadow-sm">
                   <CardContent className="relative px-6 py-8 md:px-8 md:py-10">
-                    <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,oklch(0.86_0.08_208_/_0.28),transparent_70%)]" />
+                    <div className="absolute inset-x-0 top-0 h-32 bg-[radial-gradient(circle_at_top_left,oklch(0.86_0.08_208/0.28),transparent_70%)]" />
                     <div className="relative space-y-6">
                       <div className="space-y-3">
                         <Badge variant="secondary" className="w-fit">
@@ -215,6 +213,7 @@ export default async function Page() {
                 <CreateOrOpenNoteForm recoveryEnabled={recoveryEnabled} />
               </aside>
             </div>
+          </div>
           </div>
         </main>
       </SidebarInset>

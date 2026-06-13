@@ -16,12 +16,16 @@ import {
   Heading1,
   Heading2,
   Italic,
+  KeyRound,
   List,
   ListOrdered,
   LoaderCircle,
+  Lock,
   Mail,
   Quote,
   Save,
+  SaveAll,
+  ShieldCheck,
   Type,
   Workflow,
 } from "lucide-react"
@@ -49,9 +53,14 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
-import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip"
 
 const MindmapEditor = dynamic(
   () =>
@@ -804,30 +813,49 @@ export function NoteWorkspace({
   const activeEditor = editor
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-4">
-      <Card className="shrink-0 border-border/70 bg-background/88 backdrop-blur">
-        <CardContent className="flex flex-col gap-4 p-4 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-2">
-            <div className="flex flex-wrap items-center gap-2">
-              <SidebarTrigger variant="outline" size="icon-sm" />
-              <Badge variant="outline">/{slug}</Badge>
-              <Badge variant="secondary">
-                {saveState === "saving"
-                  ? "Saving..."
-                  : saveState === "error"
-                    ? "Save failed"
-                    : "Autosave on"}
-              </Badge>
-              <Badge variant="outline">
-                {noteType === "mindmap" ? "Mind map" : "Text"}
-              </Badge>
-              <Badge variant="outline">Encrypted</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Last saved {formatUpdatedAt(lastSavedAt)}
-            </p>
-          </div>
-          <div className="flex flex-wrap gap-2">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/70 bg-background/88 px-4 backdrop-blur md:px-6">
+        <Badge variant="outline" className="font-mono text-xs">/{slug}</Badge>
+        <TooltipProvider delayDuration={400}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="flex items-center">
+                {saveState === "saving" ? (
+                  <LoaderCircle className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                ) : saveState === "error" ? (
+                  <SaveAll className="h-3.5 w-3.5 text-destructive" />
+                ) : hasPendingLocalChanges || saveState === "idle" ? (
+                  <SaveAll className="h-3.5 w-3.5 text-amber-500" />
+                ) : (
+                  <Save className="h-3.5 w-3.5 text-emerald-500" />
+                )}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {saveState === "saving"
+                ? "Saving…"
+                : saveState === "error"
+                  ? `Save failed · last saved ${formatUpdatedAt(lastSavedAt)}`
+                  : hasPendingLocalChanges
+                    ? "Unsaved changes"
+                    : `Saved · ${formatUpdatedAt(lastSavedAt)}`}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <TooltipProvider delayDuration={400}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="flex items-center">
+                <ShieldCheck className="h-3.5 w-3.5 text-muted-foreground" />
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              Encrypted · {noteType === "mindmap" ? "Mind map" : "Text"}
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
+        <div className="ml-auto flex items-center gap-1">
+          <TooltipProvider delayDuration={400}>
             {recoveryEnabled ? (
               <Dialog
                 open={isRecoveryDialogOpen}
@@ -839,12 +867,16 @@ export function NoteWorkspace({
                   }
                 }}
               >
-                <DialogTrigger asChild>
-                  <Button variant="outline">
-                    <Mail />
-                    Email new recovery key
-                  </Button>
-                </DialogTrigger>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DialogTrigger asChild>
+                      <Button variant="ghost" size="icon">
+                        <Mail className="h-4 w-4" />
+                      </Button>
+                    </DialogTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>Email new recovery key</TooltipContent>
+                </Tooltip>
                 <DialogContent>
                   <DialogHeader>
                     <DialogTitle>Email a new recovery key</DialogTitle>
@@ -903,9 +935,16 @@ export function NoteWorkspace({
                 }
               }}
             >
-              <DialogTrigger asChild>
-                <Button variant="outline">Change password</Button>
-              </DialogTrigger>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DialogTrigger asChild>
+                    <Button variant="ghost" size="icon">
+                      <KeyRound className="h-4 w-4" />
+                    </Button>
+                  </DialogTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Change password</TooltipContent>
+              </Tooltip>
               <DialogContent>
                 <DialogHeader>
                   <DialogTitle>Rotate note password</DialogTitle>
@@ -960,23 +999,38 @@ export function NoteWorkspace({
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            <Button variant="outline" onClick={() => void copyLink()}>
-              {copied ? <Check /> : <Copy />}
-              {copied ? "Copied" : "Copy link"}
-            </Button>
-            <Button variant="outline" onClick={() => void lockNote()}>
-              Lock note
-            </Button>
-            <Button asChild variant="ghost">
-              <Link href="/">
-                <ArrowLeft />
-                Home
-              </Link>
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => void copyLink()}>
+                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{copied ? "Copied!" : "Copy link"}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => void lockNote()}>
+                  <Lock className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Lock note</TooltipContent>
+            </Tooltip>
+            <Separator orientation="vertical" className="h-5" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button asChild variant="ghost" size="icon">
+                  <Link href="/">
+                    <ArrowLeft className="h-4 w-4" />
+                  </Link>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Home</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        </div>
+      </div>
 
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 py-4 md:px-6">
       <Card className="flex min-h-0 flex-1 flex-col border-border/70 bg-background/96 shadow-lg">
         <CardHeader className="shrink-0 gap-4">
           <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
@@ -989,13 +1043,23 @@ export function NoteWorkspace({
               />
             </div>
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {saveState === "saving" ? <LoaderCircle className="animate-spin" /> : <Save />}
+              {saveState === "saving" ? (
+                <LoaderCircle className="animate-spin" />
+              ) : saveState === "error" ? (
+                <SaveAll className="text-destructive" />
+              ) : hasPendingLocalChanges || saveState === "idle" ? (
+                <SaveAll className="text-amber-500" />
+              ) : (
+                <Save className="text-emerald-500" />
+              )}
               <span>
                 {saveState === "saving"
-                  ? "Saving changes"
+                  ? "Saving…"
                   : saveState === "error"
-                    ? "Needs retry"
-                    : "Changes save automatically"}
+                    ? "Save failed"
+                    : hasPendingLocalChanges
+                      ? "Unsaved changes"
+                      : "Saved"}
               </span>
             </div>
           </div>
@@ -1075,7 +1139,7 @@ export function NoteWorkspace({
           )}
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-          <div className="min-h-[360px] flex-1 overflow-hidden">
+          <div className={noteType === "mindmap" ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-y-auto"}>
             {noteType === "text" ? (
               <EditorContent className="h-full" editor={editor} />
             ) : (
@@ -1111,6 +1175,7 @@ export function NoteWorkspace({
           ) : null}
         </CardContent>
       </Card>
+      </div>
     </div>
   )
 }
