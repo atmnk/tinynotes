@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation"
 import { useMemo, useState, useTransition } from "react"
 
+import type { NoteType } from "@/lib/note-content"
 import { useRecaptcha } from "@/hooks/use-recaptcha"
 
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -11,6 +12,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
 const EXAMPLE_SLUGS = ["brain-dump", "trip-plan", "founder-notes"]
 
@@ -33,6 +35,7 @@ export function CreateOrOpenNoteForm({
   const [slug, setSlug] = useState("")
   const [password, setPassword] = useState("")
   const [recoveryEmail, setRecoveryEmail] = useState("")
+  const [noteType, setNoteType] = useState<NoteType>("text")
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -60,6 +63,7 @@ export function CreateOrOpenNoteForm({
         body: JSON.stringify({
           slug,
           password,
+          noteType,
           recoveryEmail: recoveryEnabled ? recoveryEmail : "",
         }),
       })
@@ -92,6 +96,19 @@ export function CreateOrOpenNoteForm({
       </CardHeader>
       <CardContent className="space-y-5">
         <form className="space-y-5" onSubmit={onSubmit}>
+          <div className="space-y-2">
+            <Label>Note type</Label>
+            <Tabs
+              value={noteType}
+              onValueChange={(value) => setNoteType(value as NoteType)}
+              className="w-full"
+            >
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="text">Text</TabsTrigger>
+                <TabsTrigger value="mindmap">Mind map</TabsTrigger>
+              </TabsList>
+            </Tabs>
+          </div>
           <div className="space-y-2">
             <Label htmlFor="slug">Slug</Label>
             <Input

@@ -1,6 +1,16 @@
-import type { RichTextContent } from "@/lib/note-content"
+import type {
+  MindmapContent,
+  NoteType,
+  RichTextContent,
+} from "@/lib/note-content"
 import { ensureSchema, getDb } from "@/lib/db"
 import { createRandomSecret, decryptString, encryptString } from "@/lib/encryption"
+import {
+  createDefaultMindmapContent,
+  defaultRichTextContent,
+  parseMindmapContent,
+  parseTextNoteContent,
+} from "@/lib/note-content"
 import type { NoteAccessEntry } from "@/lib/note-auth-session"
 import { hashPassword, verifyPassword } from "@/lib/password"
 import { normalizeRecoveryEmail } from "@/lib/recovery"
@@ -9,6 +19,7 @@ type NoteRow = {
   slug: string
   title: unknown
   password_hash: string
+  note_type: NoteType
   content: unknown
   version: number
   note_key_password: string | null
@@ -22,14 +33,23 @@ type NoteRow = {
   updated_at: string
 }
 
-export type NoteRecord = {
+type NoteRecordBase = {
   slug: string
   title: string
-  content: RichTextContent
   version: number
   createdAt: string
   updatedAt: string
 }
+
+export type NoteRecord =
+  | (NoteRecordBase & {
+      noteType: "text"
+      content: RichTextContent
+    })
+  | (NoteRecordBase & {
+      noteType: "mindmap"
+      content: MindmapContent
+    })
 
 export type RecoveryKeyRotationRollback = {
   slug: string
@@ -38,18 +58,32 @@ export type RecoveryKeyRotationRollback = {
 }
 
 function toNoteRecord(
-  row: Pick<NoteRow, "slug" | "version" | "created_at" | "updated_at">,
+  row: Pick<
+    NoteRow,
+    "slug" | "note_type" | "version" | "created_at" | "updated_at"
+  >,
   title: string,
-  content: RichTextContent
+  content: RichTextContent | MindmapContent
 ) {
-  return {
+  const base = {
     slug: row.slug,
     title,
-    content,
     version: row.version,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
+
+  return row.note_type === "mindmap"
+    ? {
+        ...base,
+        noteType: "mindmap" as const,
+        content: content as MindmapContent,
+      }
+    : {
+        ...base,
+        noteType: "text" as const,
+        content: content as RichTextContent,
+      }
 }
 
 async function getNoteRow(slug: string) {
@@ -61,6 +95,7 @@ async function getNoteRow(slug: string) {
       slug,
       title,
       password_hash,
+      note_type,
       content,
       version,
       note_key_password,
@@ -80,13 +115,6 @@ async function getNoteRow(slug: string) {
   return rows[0] ?? null
 }
 
-function createInitialContent(): RichTextContent {
-  return {
-    type: "doc",
-    content: [{ type: "paragraph" }],
-  }
-}
-
 function deriveFallbackTitle(slug: string) {
   const title = slug
     .split("-")
@@ -96,40 +124,32 @@ function deriveFallbackTitle(slug: string) {
   return title || "Untitled note"
 }
 
-function parseContent(value: unknown): RichTextContent {
-  if (!value) {
-    return createInitialContent()
-  }
-
-  if (typeof value === "string") {
-    try {
-      return JSON.parse(value) as RichTextContent
-    } catch {
-      return createInitialContent()
-    }
-  }
-
-  if (typeof value === "object" && "type" in (value as Record<string, unknown>)) {
-    return value as RichTextContent
-  }
-
-  return createInitialContent()
-}
-
-function decryptNoteWithNoteKey(noteKey: string, row: Pick<NoteRow, "title" | "content">) {
+function decryptNoteWithNoteKey(
+  noteKey: string,
+  row: Pick<NoteRow, "note_type" | "title" | "content">
+) {
   const encryptedTitle =
     typeof row.title === "string" ? JSON.parse(row.title) : row.title
   const title = decryptString(noteKey, encryptedTitle as Parameters<typeof decryptString>[1])
   const contentCipher =
     typeof row.content === "string" ? JSON.parse(row.content) : row.content
-  const content = JSON.parse(
+  const decryptedContent = JSON.parse(
     decryptString(noteKey, contentCipher as Parameters<typeof decryptString>[1])
-  ) as RichTextContent
+  ) as unknown
+
+  const content =
+    row.note_type === "mindmap"
+      ? parseMindmapContent(decryptedContent)
+      : parseTextNoteContent(decryptedContent)
 
   return { title, content }
 }
 
-function encryptNoteWithNoteKey(noteKey: string, title: string, content: RichTextContent) {
+function encryptNoteWithNoteKey(
+  noteKey: string,
+  title: string,
+  content: RichTextContent | MindmapContent
+) {
   return {
     title: JSON.stringify(encryptString(noteKey, title)),
     content: encryptString(noteKey, JSON.stringify(content)),
@@ -173,9 +193,9 @@ async function migrateLegacyPasswordBasedNote(row: NoteRow, password: string) {
           ? JSON.parse(row.content)
           : row.content) as Parameters<typeof decryptString>[1]
       )
-      return JSON.parse(decrypted) as RichTextContent
+      return parseTextNoteContent(JSON.parse(decrypted))
     } catch {
-      return parseContent(row.content)
+      return parseTextNoteContent(row.content)
     }
   })()
 
@@ -186,6 +206,7 @@ async function migrateLegacyPasswordBasedNote(row: NoteRow, password: string) {
     UPDATE notes
     SET
       title = ${encrypted.title},
+      note_type = 'text',
       content = ${sql.json(encrypted.content)},
       note_key_password = ${wrapNoteKeyWithPassword(password, noteKey)},
       note_key_recovery = NULL,
@@ -233,8 +254,8 @@ export async function getNoteShell(slug: string) {
   await ensureSchema()
   const sql = getDb()
 
-  const rows = await sql<Pick<NoteRow, "slug" | "version" | "updated_at">[]>`
-    SELECT slug, version, updated_at
+  const rows = await sql<Pick<NoteRow, "slug" | "note_type" | "version" | "updated_at">[]>`
+    SELECT slug, note_type, version, updated_at
     FROM notes
     WHERE slug = ${slug}
     LIMIT 1
@@ -246,14 +267,18 @@ export async function getNoteShell(slug: string) {
 export async function createOrOpenNote(
   slug: string,
   password: string,
-  recoveryEmail?: string
+  recoveryEmail?: string,
+  noteType: NoteType = "text"
 ) {
   const existingNote = await getNoteRow(slug)
 
   if (!existingNote) {
     const sql = getDb()
     const title = deriveFallbackTitle(slug)
-    const content = createInitialContent()
+    const content =
+      noteType === "mindmap"
+        ? createDefaultMindmapContent()
+        : defaultRichTextContent
     const noteKey = createRandomSecret()
     const encrypted = encryptNoteWithNoteKey(noteKey, title, content)
     const recoveryKey = recoveryEmail ? createRandomSecret(24) : null
@@ -263,6 +288,7 @@ export async function createOrOpenNote(
         slug,
         title,
         password_hash,
+        note_type,
         content,
         version,
         note_key_password,
@@ -272,6 +298,7 @@ export async function createOrOpenNote(
         ${slug},
         ${encrypted.title},
         ${hashPassword(password)},
+        ${noteType},
         ${sql.json(encrypted.content)},
         0,
         ${wrapNoteKeyWithPassword(password, noteKey)},
@@ -281,6 +308,7 @@ export async function createOrOpenNote(
         slug,
         title,
         password_hash,
+        note_type,
         content,
         version,
         note_key_password,
@@ -347,7 +375,8 @@ export async function saveNote(
   slug: string,
   password: string,
   title: string,
-  content: RichTextContent,
+  noteType: NoteType,
+  content: RichTextContent | MindmapContent,
   expectedVersion?: number
 ) {
   const row = await getNoteRow(slug)
@@ -375,6 +404,7 @@ export async function saveNote(
     UPDATE notes
     SET
       title = ${encrypted.title},
+      note_type = ${noteType},
       content = ${sql.json(encrypted.content)},
       version = version + 1,
       updated_at = NOW()
@@ -385,6 +415,7 @@ export async function saveNote(
       slug,
       title,
       password_hash,
+      note_type,
       content,
       version,
       note_key_password,
@@ -454,7 +485,7 @@ export async function changeNotePassword(
 
   const sql = getDb()
 
-  await sql<NoteRow[]>`
+  const rows = await sql<NoteRow[]>`
     UPDATE notes
     SET
       password_hash = ${hashPassword(newPassword)},
@@ -466,6 +497,7 @@ export async function changeNotePassword(
       slug,
       title,
       password_hash,
+      note_type,
       content,
       version,
       note_key_password,
@@ -481,7 +513,7 @@ export async function changeNotePassword(
 
   return {
     status: "ok" as const,
-    note: unlocked.note,
+    note: toNoteRecord(rows[0], unlocked.note.title, unlocked.note.content),
   }
 }
 
@@ -525,6 +557,7 @@ export async function recoverNoteWithRecoveryKey(
       slug,
       title,
       password_hash,
+      note_type,
       content,
       version,
       note_key_password,

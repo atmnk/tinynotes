@@ -1,5 +1,5 @@
 import type { RichTextContent } from "@/lib/note-content"
-import { defaultNoteContent } from "@/lib/note-content"
+import { defaultRichTextContent } from "@/lib/note-content"
 import {
   decryptString,
   encryptString,
@@ -107,7 +107,7 @@ function decryptContent(password: string, value: StoredNoteSecrets["content"]) {
       }
     } catch {
       return {
-        value: defaultNoteContent,
+        value: defaultRichTextContent,
         needsMigration: false,
       }
     }
@@ -121,7 +121,7 @@ function decryptContent(password: string, value: StoredNoteSecrets["content"]) {
       }
     } catch {
       return {
-        value: defaultNoteContent,
+        value: defaultRichTextContent,
         needsMigration: true,
       }
     }
@@ -135,7 +135,7 @@ function decryptContent(password: string, value: StoredNoteSecrets["content"]) {
   }
 
   return {
-    value: defaultNoteContent,
+    value: defaultRichTextContent,
     needsMigration: true,
   }
 }

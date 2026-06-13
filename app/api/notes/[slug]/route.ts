@@ -6,8 +6,8 @@ import {
   readNoteAccessSession,
   removeNoteAccessCookie,
 } from "@/lib/note-auth-session"
+import type { MindmapContent, RichTextContent } from "@/lib/note-content"
 import { changeNotePassword, saveNote, unlockNote } from "@/lib/notes"
-import type { RichTextContent } from "@/lib/note-content"
 import { verifyRecaptchaToken } from "@/lib/recaptcha"
 import {
   changePasswordSchema,
@@ -144,7 +144,8 @@ export async function PUT(request: Request, context: RouteContext) {
     slugResult.data,
     password,
     parsed.data.title,
-    parsed.data.content as RichTextContent,
+    parsed.data.noteType,
+    parsed.data.content as RichTextContent | MindmapContent,
     parsed.data.expectedVersion
   )
 

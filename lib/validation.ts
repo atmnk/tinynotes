@@ -1,5 +1,6 @@
 import { z } from "zod"
 
+import { mindmapStyles, noteTypes } from "@/lib/note-content"
 import { recoveryEmailSchemaDescription } from "@/lib/recovery"
 
 export const slugSchema = z
@@ -22,10 +23,31 @@ export const recoveryEmailSchema = z
   .trim()
   .email(recoveryEmailSchemaDescription)
 
+export const noteTypeSchema = z.enum(noteTypes)
+
+export const mindmapStyleSchema = z.enum(mindmapStyles)
+
+const textNoteContentSchema = z.object({
+  type: z.string(),
+}).and(z.record(z.string(), z.unknown()))
+
+const mindmapItemSchema = z.object({
+  id: z.string().min(1),
+  label: z.string().min(1).max(160),
+  parentId: z.string().min(1).nullable(),
+})
+
+const mindmapContentSchema = z.object({
+  style: mindmapStyleSchema,
+  items: z.array(mindmapItemSchema).min(1),
+  layoutVersion: z.number().int().nonnegative().optional(),
+})
+
 export const accessNoteSchema = z.object({
   slug: slugSchema,
   password: passwordSchema,
   recoveryEmail: recoveryEmailSchema.optional().or(z.literal("")),
+  noteType: noteTypeSchema.optional(),
 })
 
 export const unlockNoteSchema = z.object({
@@ -38,7 +60,8 @@ export const saveNoteSchema = z.object({
     .trim()
     .min(1, "Title is required.")
     .max(120, "Title must be 120 characters or fewer."),
-  content: z.record(z.string(), z.unknown()),
+  noteType: noteTypeSchema,
+  content: z.union([textNoteContentSchema, mindmapContentSchema]),
   expectedVersion: z.number().int().nonnegative().optional(),
 })
 

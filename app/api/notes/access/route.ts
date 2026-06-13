@@ -37,7 +37,8 @@ export async function POST(request: Request) {
   const result = await createOrOpenNote(
     slug,
     password,
-    recoveryEnabled ? recoveryEmail || undefined : undefined
+    recoveryEnabled ? recoveryEmail || undefined : undefined,
+    parsed.data.noteType ?? "text"
   )
 
   if (result.status === "forbidden") {

@@ -19,13 +19,19 @@ Keep this file up to date as the project evolves. When important architectural, 
 - After password-authenticated access, the user can rotate and email a fresh recovery key. The old recovery key is not stored and cannot be resent verbatim.
 - All email recovery related UI, routes, and behavior must be hidden behind `RECOVERY_FEATURE_ENABLED`.
 - Notes autosave while the user edits.
-- Notes support rich text formatting.
+- Every note has a `type`.
+- Current note types are `text` and `mindmap`.
+- Notes support rich text formatting and canvas-based mind maps.
+- Mind maps use `@xyflow/react`.
+- Mind map editing supports right-click context menus on nodes for adding child nodes.
+- Users can change the visual mind map style inside the editor.
+- Supported mind map styles currently include concept map, flowchart, bubble map, tree diagram, timeline map, double bubble, fishbone, org chart, and matrix.
 
 ## UI rules
 
 - Prefer shadcn/ui components whenever a suitable shadcn component exists.
 - Avoid hand-coded replacements for buttons, cards, inputs, alerts, tabs, dialogs, badges, and similar primitives when shadcn already provides them.
-- Custom UI is acceptable for areas where shadcn has no equivalent, such as the TipTap editing surface itself.
+- Custom UI is acceptable for areas where shadcn has no equivalent, such as the TipTap editing surface and the XYFlow mind map canvas itself.
 
 ## Framework and architecture
 
@@ -39,15 +45,15 @@ Keep this file up to date as the project evolves. When important architectural, 
 - Local development should work against Dockerized Postgres.
 - Target deployment is Netlify.
 - Production server-side work should run through Netlify Functions on the free tier.
-- Database target is a plain Neon database (not Netlify Database, which is paid).
-- Use `DATABASE_URL` for both local Docker/Postgres and production Neon connections.
-- In Netlify, set `DATABASE_URL` to the Neon connection string via Netlify's environment variables UI.
+- Production database setup should follow `npx netlify db init`.
+- Netlify Database is the intended production database workflow.
+- Neon remains the hosted Postgres layer underneath Netlify Database.
+- Use `DATABASE_URL` for local Docker/Postgres development.
 - Use `AUTH_COOKIE_SECRET` for encrypted note-access cookies.
 - reCAPTCHA v3 protects `POST /api/notes/access`, `POST /api/notes/[slug]` (unlock), and `POST /api/recovery`. Client sends token in `x-recaptcha-token` header; server verifies via `lib/recaptcha.ts`. When `RECAPTCHA_SECRET_KEY` is unset (local dev), verification is skipped automatically.
 - `NEXT_PUBLIC_RECAPTCHA_SITE_KEY` and `RECAPTCHA_SECRET_KEY` must be set in production. The floating badge is hidden via CSS; Google-required attribution links appear inline in each protected form.
-- Do not use `NETLIFY_DB_URL` or the `@netlify/database` package — Netlify Database is a paid product.
-- The `netlify/database/migrations/` directory exists as reference SQL; it is not applied automatically.
-- The database layer lazily ensures the `notes` table exists on startup (for both local and production).
+- The `netlify/database/migrations/` directory contains the authoritative SQL migrations for deployment.
+- The database layer lazily ensures the `notes` table exists on startup for local development.
 - Passwords are hashed with Node `crypto.scrypt`, not stored in plaintext.
 - Note title and note content are encrypted at rest with the user password, and password changes should re-encrypt stored note data with the new password.
 - Do not store note passwords in local storage. Browser note access should be cached in secure `httpOnly` encrypted cookies instead.
@@ -59,13 +65,13 @@ Keep this file up to date as the project evolves. When important architectural, 
 - Home page flow is create-or-open in one form.
 - Note pages live at `app/[slug]`.
 - Unlocking a note happens client-side by posting the password to `/api/notes/[slug]`.
-- Autosave writes title and rich-text content back through `PUT /api/notes/[slug]`.
+- Autosave writes title and note content back through `PUT /api/notes/[slug]`.
 - Autosave concurrency should use a database-backed monotonically increasing `version` field, not timestamp string equality.
 - When a note tab regains focus, the client should fetch the latest server copy before allowing further edits if another tab or device has changed the note.
 - Programmatic editor refreshes must not trigger autosave by themselves.
 - Password rotation uses `PATCH /api/notes/[slug]`.
 - Recovery password resets use `POST /api/recovery`.
-- The current editor stack is TipTap with StarterKit and Placeholder.
+- The current editor stack is TipTap with StarterKit and Placeholder for text notes, plus `@xyflow/react` for mind maps.
 - The note page uses a shadcn sidebar to show notes currently accessible in this browser session from the auth cookie.
 - The home page should also use the left sidebar to show all notes accessible in the current browser session, with landing-page feature content in the main pane when no note is selected.
 - Local database bootstrap lives in `docker-compose.yml`.

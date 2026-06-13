@@ -1,5 +1,6 @@
 "use client"
 
+import dynamic from "next/dynamic"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useCallback, useEffect, useRef, useState } from "react"
@@ -11,6 +12,7 @@ import {
   Bold,
   Check,
   Copy,
+  FileText,
   Heading1,
   Heading2,
   Italic,
@@ -21,10 +23,15 @@ import {
   Quote,
   Save,
   Type,
+  Workflow,
 } from "lucide-react"
 
-import type { RichTextContent } from "@/lib/note-content"
-import { defaultNoteContent } from "@/lib/note-content"
+import type {
+  MindmapContent,
+  NoteType,
+  RichTextContent,
+} from "@/lib/note-content"
+import { defaultRichTextContent } from "@/lib/note-content"
 import { useRecaptcha } from "@/hooks/use-recaptcha"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -44,14 +51,39 @@ import { Label } from "@/components/ui/label"
 import { Separator } from "@/components/ui/separator"
 import { SidebarTrigger } from "@/components/ui/sidebar"
 import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
-type NotePayload = {
+const MindmapEditor = dynamic(
+  () =>
+    import("@/app/[slug]/_components/mindmap-editor").then((module) => ({
+      default: module.MindmapEditor,
+    })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-[520px] items-center justify-center rounded-xl border border-border/70 bg-background text-sm text-muted-foreground">
+        Loading mind map editor...
+      </div>
+    ),
+  }
+)
+
+type NotePayloadBase = {
   slug: string
   title: string
-  content: RichTextContent
   version: number
   updatedAt: string
 }
+
+type NotePayload =
+  | (NotePayloadBase & {
+      noteType: "text"
+      content: RichTextContent
+    })
+  | (NotePayloadBase & {
+      noteType: "mindmap"
+      content: MindmapContent
+    })
 
 type SaveState = "idle" | "saving" | "saved" | "error"
 
@@ -84,14 +116,20 @@ export function NoteWorkspace({
   const hydratedContentRef = useRef(Boolean(initialNote))
   const [accessPassword, setAccessPassword] = useState("")
   const [recoveryEmail, setRecoveryEmail] = useState("")
+  const [draftNoteType, setDraftNoteType] = useState<NoteType>(
+    initialNote?.noteType ?? "text"
+  )
   const [unlockError, setUnlockError] = useState<string | null>(null)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [isUnlocked, setIsUnlocked] = useState(Boolean(initialNote))
   const [doesNoteExist, setDoesNoteExist] = useState(noteExists)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [title, setTitle] = useState(initialNote?.title ?? initialTitle)
-  const [noteContent, setNoteContent] = useState<RichTextContent>(
-    initialNote?.content ?? defaultNoteContent
+  const [noteType, setNoteType] = useState<NoteType>(
+    initialNote?.noteType ?? "text"
+  )
+  const [noteContent, setNoteContent] = useState<RichTextContent | MindmapContent>(
+    initialNote?.content ?? defaultRichTextContent
   )
   const [saveState, setSaveState] = useState<SaveState>(
     initialNote ? "saved" : "idle"
@@ -125,7 +163,10 @@ export function NoteWorkspace({
         placeholder: "Start typing. Changes are saved automatically.",
       }),
     ],
-    content: initialNote?.content ?? defaultNoteContent,
+    content:
+      initialNote?.noteType === "text"
+        ? initialNote.content
+        : defaultRichTextContent,
     editorProps: {
       attributes: {
         class: "tiptap focus-visible:ring-0",
@@ -136,7 +177,7 @@ export function NoteWorkspace({
         return
       }
 
-      scheduleSave(nextEditor.getJSON() as RichTextContent, title)
+      scheduleSave("text", nextEditor.getJSON() as RichTextContent, title)
     },
   })
 
@@ -165,6 +206,8 @@ export function NoteWorkspace({
 
   const applyUnlockedNote = useCallback((note: NotePayload) => {
     setTitle(note.title)
+    setNoteType(note.noteType)
+    setDraftNoteType(note.noteType)
     setNoteContent(note.content)
     setLastSavedVersion(note.version)
     setLastSavedAt(note.updatedAt)
@@ -177,7 +220,11 @@ export function NoteWorkspace({
   }, [])
 
   const persistNote = useCallback(
-    async (nextTitle: string, nextContent: RichTextContent) => {
+    async (
+      nextTitle: string,
+      nextNoteType: NoteType,
+      nextContent: RichTextContent | MindmapContent
+    ) => {
       setSaveState("saving")
       setSaveError(null)
 
@@ -188,6 +235,7 @@ export function NoteWorkspace({
         },
         body: JSON.stringify({
           title: nextTitle,
+          noteType: nextNoteType,
           content: nextContent,
           expectedVersion: lastSavedVersion,
         }),
@@ -219,7 +267,11 @@ export function NoteWorkspace({
   )
 
   const scheduleSave = useCallback(
-    (nextContent: RichTextContent, nextTitle: string) => {
+    (
+      nextNoteType: NoteType,
+      nextContent: RichTextContent | MindmapContent,
+      nextTitle: string
+    ) => {
       if (!isUnlocked) {
         return
       }
@@ -230,7 +282,7 @@ export function NoteWorkspace({
 
       setHasPendingLocalChanges(true)
       saveTimerRef.current = window.setTimeout(() => {
-        void persistNote(nextTitle, nextContent)
+        void persistNote(nextTitle, nextNoteType, nextContent)
       }, 700)
     },
     [isUnlocked, persistNote]
@@ -289,6 +341,7 @@ export function NoteWorkspace({
         body: JSON.stringify({
           slug,
           password,
+          noteType: draftNoteType,
           recoveryEmail: recoveryEnabled ? recoveryEmail : "",
         }),
       })
@@ -315,7 +368,15 @@ export function NoteWorkspace({
       setSyncMessage(null)
       router.refresh()
     },
-    [applyUnlockedNote, executeRecaptcha, recoveryEmail, recoveryEnabled, router, slug]
+    [
+      applyUnlockedNote,
+      draftNoteType,
+      executeRecaptcha,
+      recoveryEmail,
+      recoveryEnabled,
+      router,
+      slug,
+    ]
   )
 
   const refreshLatestNote = useCallback(async () => {
@@ -351,13 +412,13 @@ export function NoteWorkspace({
   ])
 
   useEffect(() => {
-    if (!editor || !isUnlocked) {
+    if (!editor || !isUnlocked || noteType !== "text") {
       return
     }
 
-    editor.commands.setContent(noteContent, { emitUpdate: false })
+    editor.commands.setContent(noteContent as RichTextContent, { emitUpdate: false })
     hydratedContentRef.current = true
-  }, [editor, isUnlocked, noteContent])
+  }, [editor, isUnlocked, noteContent, noteType])
 
   useEffect(() => {
     if (!isUnlocked) {
@@ -394,11 +455,26 @@ export function NoteWorkspace({
   function handleTitleChange(nextTitle: string) {
     setTitle(nextTitle)
 
-    if (!editor || !isUnlocked) {
+    if (!isUnlocked) {
       return
     }
 
-    scheduleSave(editor.getJSON() as RichTextContent, nextTitle)
+    if (noteType === "text") {
+      if (!editor) {
+        return
+      }
+
+      scheduleSave("text", editor.getJSON() as RichTextContent, nextTitle)
+      return
+    }
+
+    scheduleSave("mindmap", noteContent as MindmapContent, nextTitle)
+  }
+
+  function handleMindmapChange(nextContent: MindmapContent) {
+    setNoteType("mindmap")
+    setNoteContent(nextContent)
+    scheduleSave("mindmap", nextContent, title)
   }
 
   async function copyLink() {
@@ -555,6 +631,25 @@ export function NoteWorkspace({
               here. Access will then be remembered in a secure cookie for this browser session.
             </p>
             <div className="space-y-2">
+              <Label>Note type</Label>
+              <Tabs
+                value={draftNoteType}
+                onValueChange={(value) => setDraftNoteType(value as NoteType)}
+                className="w-full"
+              >
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="text">
+                    <FileText />
+                    Text
+                  </TabsTrigger>
+                  <TabsTrigger value="mindmap">
+                    <Workflow />
+                    Mind map
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="claim-password">Password</Label>
               <Input
                 id="claim-password"
@@ -706,7 +801,7 @@ export function NoteWorkspace({
     )
   }
 
-  const activeEditor = editor!
+  const activeEditor = editor
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
@@ -722,6 +817,9 @@ export function NoteWorkspace({
                   : saveState === "error"
                     ? "Save failed"
                     : "Autosave on"}
+              </Badge>
+              <Badge variant="outline">
+                {noteType === "mindmap" ? "Mind map" : "Text"}
               </Badge>
               <Badge variant="outline">Encrypted</Badge>
             </div>
@@ -902,76 +1000,90 @@ export function NoteWorkspace({
             </div>
           </div>
           <Separator />
-          <div className="flex flex-wrap gap-2">
-            <Button
-              variant={toolbarState.isBold ? "default" : "outline"}
-              size="sm"
-              onClick={() => activeEditor.chain().focus().toggleBold().run()}
-            >
-              <Bold />
-              Bold
-            </Button>
-            <Button
-              variant={toolbarState.isItalic ? "default" : "outline"}
-              size="sm"
-              onClick={() => activeEditor.chain().focus().toggleItalic().run()}
-            >
-              <Italic />
-              Italic
-            </Button>
-            <Button
-              variant={toolbarState.isHeading1 ? "default" : "outline"}
-              size="sm"
-              onClick={() => activeEditor.chain().focus().toggleHeading({ level: 1 }).run()}
-            >
-              <Heading1 />
-              H1
-            </Button>
-            <Button
-              variant={toolbarState.isHeading2 ? "default" : "outline"}
-              size="sm"
-              onClick={() => activeEditor.chain().focus().toggleHeading({ level: 2 }).run()}
-            >
-              <Heading2 />
-              H2
-            </Button>
-            <Button
-              variant={toolbarState.isBulletList ? "default" : "outline"}
-              size="sm"
-              onClick={() => activeEditor.chain().focus().toggleBulletList().run()}
-            >
-              <List />
-              Bullets
-            </Button>
-            <Button
-              variant={toolbarState.isOrderedList ? "default" : "outline"}
-              size="sm"
-              onClick={() => activeEditor.chain().focus().toggleOrderedList().run()}
-            >
-              <ListOrdered />
-              Numbers
-            </Button>
-            <Button
-              variant={toolbarState.isBlockquote ? "default" : "outline"}
-              size="sm"
-              onClick={() => activeEditor.chain().focus().toggleBlockquote().run()}
-            >
-              <Quote />
-              Quote
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => activeEditor.chain().focus().setParagraph().run()}
-            >
-              <Type />
-              Paragraph
-            </Button>
-          </div>
+          {noteType === "text" && activeEditor ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant={toolbarState.isBold ? "default" : "outline"}
+                size="sm"
+                onClick={() => activeEditor.chain().focus().toggleBold().run()}
+              >
+                <Bold />
+                Bold
+              </Button>
+              <Button
+                variant={toolbarState.isItalic ? "default" : "outline"}
+                size="sm"
+                onClick={() => activeEditor.chain().focus().toggleItalic().run()}
+              >
+                <Italic />
+                Italic
+              </Button>
+              <Button
+                variant={toolbarState.isHeading1 ? "default" : "outline"}
+                size="sm"
+                onClick={() => activeEditor.chain().focus().toggleHeading({ level: 1 }).run()}
+              >
+                <Heading1 />
+                H1
+              </Button>
+              <Button
+                variant={toolbarState.isHeading2 ? "default" : "outline"}
+                size="sm"
+                onClick={() => activeEditor.chain().focus().toggleHeading({ level: 2 }).run()}
+              >
+                <Heading2 />
+                H2
+              </Button>
+              <Button
+                variant={toolbarState.isBulletList ? "default" : "outline"}
+                size="sm"
+                onClick={() => activeEditor.chain().focus().toggleBulletList().run()}
+              >
+                <List />
+                Bullets
+              </Button>
+              <Button
+                variant={toolbarState.isOrderedList ? "default" : "outline"}
+                size="sm"
+                onClick={() => activeEditor.chain().focus().toggleOrderedList().run()}
+              >
+                <ListOrdered />
+                Numbers
+              </Button>
+              <Button
+                variant={toolbarState.isBlockquote ? "default" : "outline"}
+                size="sm"
+                onClick={() => activeEditor.chain().focus().toggleBlockquote().run()}
+              >
+                <Quote />
+                Quote
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => activeEditor.chain().focus().setParagraph().run()}
+              >
+                <Type />
+                Paragraph
+              </Button>
+            </div>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Right-click nodes to add children, and use the style picker inside
+              the canvas to change the mind map type.
+            </p>
+          )}
         </CardHeader>
         <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
           <div className="min-h-[360px] flex-1 overflow-hidden">
-            <EditorContent className="h-full" editor={editor} />
+            {noteType === "text" ? (
+              <EditorContent className="h-full" editor={editor} />
+            ) : (
+              <MindmapEditor
+                value={noteContent as MindmapContent}
+                onChange={handleMindmapChange}
+              />
+            )}
           </div>
           {passwordChangeMessage ? (
             <Alert>

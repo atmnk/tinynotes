@@ -1,9 +1,10 @@
 import {
+  Boxes,
   Globe2,
   KeyRound,
   ShieldCheck,
   Sparkles,
-  Waypoints,
+  Workflow,
   Zap,
 } from "lucide-react"
 
@@ -20,7 +21,7 @@ const featureCards = [
   {
     title: "Tiny links that feel natural",
     description: "Open notes directly at `/your-slug`, including one-character slugs.",
-    icon: Waypoints,
+    icon: Globe2,
   },
   {
     title: "Private by design",
@@ -28,8 +29,19 @@ const featureCards = [
     icon: ShieldCheck,
   },
   {
+    title: "More than one note shape",
+    description: "Start with rich text or a canvas mind map, with room for more note types later.",
+    icon: Boxes,
+  },
+  {
+    title: "Mind maps built for quick structure",
+    description:
+      "Right-click to grow branches and switch between map styles without leaving the note.",
+    icon: Workflow,
+  },
+  {
     title: "Editing that stays out of your way",
-    description: "TipTap rich text editing with autosave and conflict-aware tab syncing.",
+    description: "Autosave with conflict-aware tab syncing helps avoid silent overwrites.",
     icon: Zap,
   },
 ]
@@ -39,6 +51,11 @@ const productFacts = [
     label: "Direct URLs",
     value: "/ideas",
     description: "Create once, reopen later from the address bar.",
+  },
+  {
+    label: "Note types",
+    value: "Text + mind maps",
+    description: "Each note has a type, starting with rich text or a visual map canvas.",
   },
   {
     label: "Recovery",
@@ -65,7 +82,8 @@ const steps = [
   },
   {
     title: "Write and return anytime",
-    description: "TinyNotes autosaves as you work and remembers unlocked notes in this browser session.",
+    description:
+      "TinyNotes autosaves as you work, refreshes on focus to avoid stale edits, and remembers unlocked notes in this browser session.",
     icon: Sparkles,
   },
 ]
@@ -137,7 +155,7 @@ export default async function Page() {
                   </CardContent>
                 </Card>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                   {featureCards.map((feature) => (
                     <Card
                       key={feature.title}
