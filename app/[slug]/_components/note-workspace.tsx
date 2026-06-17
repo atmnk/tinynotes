@@ -95,6 +95,14 @@ type NotePayload =
     })
 
 type SaveState = "idle" | "saving" | "saved" | "error"
+type PendingSave = {
+  title: string
+  noteType: NoteType
+  content: RichTextContent | MindmapContent
+  revision: number
+}
+
+const AUTOSAVE_IDLE_MS = 1800
 
 function formatUpdatedAt(value: string) {
   return new Intl.DateTimeFormat("en-US", {
@@ -123,6 +131,10 @@ export function NoteWorkspace({
   const executeRecaptcha = useRecaptcha()
   const saveTimerRef = useRef<number | null>(null)
   const hydratedContentRef = useRef(Boolean(initialNote))
+  const pendingSaveRef = useRef<PendingSave | null>(null)
+  const isSavingRef = useRef(false)
+  const lastSavedVersionRef = useRef(initialNote?.version ?? 0)
+  const latestRevisionRef = useRef(0)
   const [accessPassword, setAccessPassword] = useState("")
   const [recoveryEmail, setRecoveryEmail] = useState("")
   const [draftNoteType, setDraftNoteType] = useState<NoteType>(
@@ -137,13 +149,15 @@ export function NoteWorkspace({
   const [noteType, setNoteType] = useState<NoteType>(
     initialNote?.noteType ?? "text"
   )
-  const [noteContent, setNoteContent] = useState<RichTextContent | MindmapContent>(
-    initialNote?.content ?? defaultRichTextContent
-  )
+  const [noteContent, setNoteContent] = useState<
+    RichTextContent | MindmapContent
+  >(initialNote?.content ?? defaultRichTextContent)
   const [saveState, setSaveState] = useState<SaveState>(
     initialNote ? "saved" : "idle"
   )
-  const [lastSavedVersion, setLastSavedVersion] = useState(initialNote?.version ?? 0)
+  const [lastSavedVersion, setLastSavedVersion] = useState(
+    initialNote?.version ?? 0
+  )
   const [lastSavedAt, setLastSavedAt] = useState(
     initialNote?.updatedAt ?? updatedAt
   )
@@ -154,14 +168,18 @@ export function NoteWorkspace({
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false)
   const [nextPassword, setNextPassword] = useState("")
   const [confirmNextPassword, setConfirmNextPassword] = useState("")
-  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(null)
-  const [passwordChangeMessage, setPasswordChangeMessage] = useState<string | null>(
+  const [passwordChangeError, setPasswordChangeError] = useState<string | null>(
     null
   )
+  const [passwordChangeMessage, setPasswordChangeMessage] = useState<
+    string | null
+  >(null)
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [recoveryKeyEmail, setRecoveryKeyEmail] = useState("")
   const [recoveryKeyError, setRecoveryKeyError] = useState<string | null>(null)
-  const [recoveryKeyMessage, setRecoveryKeyMessage] = useState<string | null>(null)
+  const [recoveryKeyMessage, setRecoveryKeyMessage] = useState<string | null>(
+    null
+  )
   const [isEmailingRecoveryKey, setIsEmailingRecoveryKey] = useState(false)
 
   const editor = useEditor({
@@ -214,6 +232,15 @@ export function NoteWorkspace({
   }
 
   const applyUnlockedNote = useCallback((note: NotePayload) => {
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+
+    pendingSaveRef.current = null
+    isSavingRef.current = false
+    latestRevisionRef.current = 0
+    lastSavedVersionRef.current = note.version
     setTitle(note.title)
     setNoteType(note.noteType)
     setDraftNoteType(note.noteType)
@@ -228,31 +255,41 @@ export function NoteWorkspace({
     hydratedContentRef.current = false
   }, [])
 
-  const persistNote = useCallback(
-    async (
-      nextTitle: string,
-      nextNoteType: NoteType,
-      nextContent: RichTextContent | MindmapContent
-    ) => {
-      setSaveState("saving")
-      setSaveError(null)
+  const flushPendingSave = useCallback(async () => {
+    if (!isUnlocked || isSavingRef.current || !pendingSaveRef.current) {
+      return
+    }
 
+    const nextSave = pendingSaveRef.current
+    pendingSaveRef.current = null
+    isSavingRef.current = true
+
+    if (saveTimerRef.current) {
+      window.clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = null
+    }
+
+    setSaveState("saving")
+    setSaveError(null)
+
+    try {
       const response = await fetch(`/api/notes/${slug}`, {
         method: "PUT",
         headers: {
           "content-type": "application/json",
         },
         body: JSON.stringify({
-          title: nextTitle,
-          noteType: nextNoteType,
-          content: nextContent,
-          expectedVersion: lastSavedVersion,
+          title: nextSave.title,
+          noteType: nextSave.noteType,
+          content: nextSave.content,
+          expectedVersion: lastSavedVersionRef.current,
         }),
       })
 
-      const result = (await response.json().catch(() => null)) as
-        | { error?: string; note?: NotePayload }
-        | null
+      const result = (await response.json().catch(() => null)) as {
+        error?: string
+        note?: NotePayload
+      } | null
 
       if (!response.ok || !result?.note) {
         if (response.status === 409 && result?.note) {
@@ -261,19 +298,29 @@ export function NoteWorkspace({
             "A newer version from another tab or device was loaded before this save completed."
           )
         }
+
         setSaveState("error")
         setSaveError(result?.error ?? "Autosave failed. Try again in a moment.")
         return
       }
 
+      lastSavedVersionRef.current = result.note.version
       setLastSavedVersion(result.note.version)
       setLastSavedAt(result.note.updatedAt)
-      setHasPendingLocalChanges(false)
+      setHasPendingLocalChanges(latestRevisionRef.current !== nextSave.revision)
       setSyncMessage(null)
       setSaveState("saved")
-    },
-    [applyUnlockedNote, lastSavedVersion, slug]
-  )
+    } catch {
+      setSaveState("error")
+      setSaveError("Autosave failed. Try again in a moment.")
+    } finally {
+      isSavingRef.current = false
+
+      if (pendingSaveRef.current) {
+        void flushPendingSave()
+      }
+    }
+  }, [applyUnlockedNote, isUnlocked, slug])
 
   const scheduleSave = useCallback(
     (
@@ -285,16 +332,25 @@ export function NoteWorkspace({
         return
       }
 
+      latestRevisionRef.current += 1
+      pendingSaveRef.current = {
+        title: nextTitle,
+        noteType: nextNoteType,
+        content: nextContent,
+        revision: latestRevisionRef.current,
+      }
+
       if (saveTimerRef.current) {
         window.clearTimeout(saveTimerRef.current)
       }
 
       setHasPendingLocalChanges(true)
+      setSaveState("idle")
       saveTimerRef.current = window.setTimeout(() => {
-        void persistNote(nextTitle, nextNoteType, nextContent)
-      }, 700)
+        void flushPendingSave()
+      }, AUTOSAVE_IDLE_MS)
     },
-    [isUnlocked, persistNote]
+    [flushPendingSave, isUnlocked]
   )
 
   const unlockNote = useCallback(
@@ -314,9 +370,10 @@ export function NoteWorkspace({
         }),
       })
 
-      const result = (await response.json().catch(() => null)) as
-        | { error?: string; note?: NotePayload }
-        | null
+      const result = (await response.json().catch(() => null)) as {
+        error?: string
+        note?: NotePayload
+      } | null
 
       if (!response.ok || !result?.note) {
         setUnlockError(result?.error ?? "We couldn’t unlock this note.")
@@ -355,14 +412,12 @@ export function NoteWorkspace({
         }),
       })
 
-      const result = (await response.json().catch(() => null)) as
-        | {
-            error?: string
-            slug?: string
-            status?: "created" | "opened"
-            note?: NotePayload
-          }
-        | null
+      const result = (await response.json().catch(() => null)) as {
+        error?: string
+        slug?: string
+        status?: "created" | "opened"
+        note?: NotePayload
+      } | null
 
       if (!response.ok || !result?.slug || !result.status || !result.note) {
         setUnlockError(result?.error ?? "We couldn’t claim that slug.")
@@ -398,9 +453,10 @@ export function NoteWorkspace({
       cache: "no-store",
     })
 
-    const result = (await response.json().catch(() => null)) as
-      | { error?: string; note?: NotePayload }
-      | null
+    const result = (await response.json().catch(() => null)) as {
+      error?: string
+      note?: NotePayload
+    } | null
 
     if (!response.ok || !result?.note) {
       return
@@ -425,7 +481,9 @@ export function NoteWorkspace({
       return
     }
 
-    editor.commands.setContent(noteContent as RichTextContent, { emitUpdate: false })
+    editor.commands.setContent(noteContent as RichTextContent, {
+      emitUpdate: false,
+    })
     hydratedContentRef.current = true
   }, [editor, isUnlocked, noteContent, noteType])
 
@@ -516,9 +574,10 @@ export function NoteWorkspace({
       }),
     })
 
-    const result = (await response.json().catch(() => null)) as
-      | { error?: string; note?: NotePayload }
-      | null
+    const result = (await response.json().catch(() => null)) as {
+      error?: string
+      note?: NotePayload
+    } | null
 
     if (!response.ok || !result?.note) {
       setIsChangingPassword(false)
@@ -531,7 +590,9 @@ export function NoteWorkspace({
     applyUnlockedNote(result.note)
     setNextPassword("")
     setConfirmNextPassword("")
-    setPasswordChangeMessage("Password updated. Auth cookie and note encryption were rotated.")
+    setPasswordChangeMessage(
+      "Password updated. Auth cookie and note encryption were rotated."
+    )
     setIsChangingPassword(false)
     setIsPasswordDialogOpen(false)
     setHasPendingLocalChanges(false)
@@ -558,9 +619,11 @@ export function NoteWorkspace({
       }),
     })
 
-    const result = (await response.json().catch(() => null)) as
-      | { error?: string; message?: string; recoveryEmail?: string }
-      | null
+    const result = (await response.json().catch(() => null)) as {
+      error?: string
+      message?: string
+      recoveryEmail?: string
+    } | null
 
     if (!response.ok || !result?.message || !result.recoveryEmail) {
       setIsEmailingRecoveryKey(false)
@@ -637,7 +700,8 @@ export function NoteWorkspace({
           <CardContent className="space-y-5">
             <p className="text-sm leading-7 text-muted-foreground">
               This slug is available. Set a password to create the note right
-              here. Access will then be remembered in a secure cookie for this browser session.
+              here. Access will then be remembered in a secure cookie for this
+              browser session.
             </p>
             <div className="space-y-2">
               <Label>Note type</Label>
@@ -676,7 +740,9 @@ export function NoteWorkspace({
             </div>
             {recoveryEnabled ? (
               <div className="space-y-2">
-                <Label htmlFor="claim-recovery-email">Recovery email (Optional)</Label>
+                <Label htmlFor="claim-recovery-email">
+                  Recovery email (Optional)
+                </Label>
                 <Input
                   id="claim-recovery-email"
                   type="email"
@@ -772,11 +838,14 @@ export function NoteWorkspace({
             </Button>
             <p className="text-sm leading-7 text-muted-foreground">
               This URL exists, but content stays hidden until the matching
-              password is entered. Successful access is cached in a secure `httpOnly` cookie instead of local storage.
+              password is entered. Successful access is cached in a secure
+              `httpOnly` cookie instead of local storage.
             </p>
             {recoveryEnabled ? (
               <Button asChild type="button" variant="outline">
-                <Link href={`/recover?slug=${slug}`}>Recover with emailed key</Link>
+                <Link href={`/recover?slug=${slug}`}>
+                  Recover with emailed key
+                </Link>
               </Button>
             ) : null}
             {unlockError ? (
@@ -815,7 +884,9 @@ export function NoteWorkspace({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-12 shrink-0 items-center gap-2 border-b border-border/70 bg-background/88 px-4 backdrop-blur md:px-6">
-        <Badge variant="outline" className="font-mono text-xs">/{slug}</Badge>
+        <Badge variant="outline" className="font-mono text-xs">
+          /{slug}
+        </Badge>
         <TooltipProvider delayDuration={400}>
           <Tooltip>
             <TooltipTrigger asChild>
@@ -888,17 +959,21 @@ export function NoteWorkspace({
                   </DialogHeader>
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="recovery-email-rotate">Recovery email</Label>
+                      <Label htmlFor="recovery-email-rotate">
+                        Recovery email
+                      </Label>
                       <Input
                         id="recovery-email-rotate"
                         type="email"
                         value={recoveryKeyEmail}
                         placeholder="Leave blank to reuse the current recovery email"
-                        onChange={(event) => setRecoveryKeyEmail(event.target.value)}
+                        onChange={(event) =>
+                          setRecoveryKeyEmail(event.target.value)
+                        }
                       />
                       <p className="text-xs text-muted-foreground">
-                        Enter a new email to replace the existing recovery email,
-                        or leave this blank to reuse the current one.
+                        Enter a new email to replace the existing recovery
+                        email, or leave this blank to reuse the current one.
                       </p>
                     </div>
                     {recoveryKeyError ? (
@@ -965,12 +1040,16 @@ export function NoteWorkspace({
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="confirm-new-password">Confirm new password</Label>
+                    <Label htmlFor="confirm-new-password">
+                      Confirm new password
+                    </Label>
                     <Input
                       id="confirm-new-password"
                       type="password"
                       value={confirmNextPassword}
-                      onChange={(event) => setConfirmNextPassword(event.target.value)}
+                      onChange={(event) =>
+                        setConfirmNextPassword(event.target.value)
+                      }
                     />
                   </div>
                   {passwordChangeError ? (
@@ -1001,15 +1080,29 @@ export function NoteWorkspace({
             </Dialog>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => void copyLink()}>
-                  {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => void copyLink()}
+                >
+                  {copied ? (
+                    <Check className="h-4 w-4" />
+                  ) : (
+                    <Copy className="h-4 w-4" />
+                  )}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{copied ? "Copied!" : "Copy link"}</TooltipContent>
+              <TooltipContent>
+                {copied ? "Copied!" : "Copy link"}
+              </TooltipContent>
             </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" onClick={() => void lockNote()}>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => void lockNote()}
+                >
                   <Lock className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
@@ -1031,150 +1124,180 @@ export function NoteWorkspace({
       </div>
 
       <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden px-4 py-4 md:px-6">
-      <Card className="flex min-h-0 flex-1 flex-col border-border/70 bg-background/96 shadow-lg">
-        <CardHeader className="shrink-0 gap-4">
-          <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
-            <div className="space-y-2">
-              <Label htmlFor="note-title">Title</Label>
-              <Input
-                id="note-title"
-                value={title}
-                onChange={(event) => handleTitleChange(event.target.value)}
-              />
+        <Card className="flex min-h-0 flex-1 flex-col border-border/70 bg-background/96 shadow-lg">
+          <CardHeader className="shrink-0 gap-4">
+            <div className="grid gap-4 md:grid-cols-[1fr_auto] md:items-end">
+              <div className="space-y-2">
+                <Label htmlFor="note-title">Title</Label>
+                <Input
+                  id="note-title"
+                  value={title}
+                  onChange={(event) => handleTitleChange(event.target.value)}
+                />
+              </div>
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                {saveState === "saving" ? (
+                  <LoaderCircle className="animate-spin" />
+                ) : saveState === "error" ? (
+                  <SaveAll className="text-destructive" />
+                ) : hasPendingLocalChanges || saveState === "idle" ? (
+                  <SaveAll className="text-amber-500" />
+                ) : (
+                  <Save className="text-emerald-500" />
+                )}
+                <span>
+                  {saveState === "saving"
+                    ? "Saving…"
+                    : saveState === "error"
+                      ? "Save failed"
+                      : hasPendingLocalChanges
+                        ? "Unsaved changes"
+                        : "Saved"}
+                </span>
+              </div>
             </div>
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              {saveState === "saving" ? (
-                <LoaderCircle className="animate-spin" />
-              ) : saveState === "error" ? (
-                <SaveAll className="text-destructive" />
-              ) : hasPendingLocalChanges || saveState === "idle" ? (
-                <SaveAll className="text-amber-500" />
-              ) : (
-                <Save className="text-emerald-500" />
-              )}
-              <span>
-                {saveState === "saving"
-                  ? "Saving…"
-                  : saveState === "error"
-                    ? "Save failed"
-                    : hasPendingLocalChanges
-                      ? "Unsaved changes"
-                      : "Saved"}
-              </span>
-            </div>
-          </div>
-          <Separator />
-          {noteType === "text" && activeEditor ? (
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant={toolbarState.isBold ? "default" : "outline"}
-                size="sm"
-                onClick={() => activeEditor.chain().focus().toggleBold().run()}
-              >
-                <Bold />
-                Bold
-              </Button>
-              <Button
-                variant={toolbarState.isItalic ? "default" : "outline"}
-                size="sm"
-                onClick={() => activeEditor.chain().focus().toggleItalic().run()}
-              >
-                <Italic />
-                Italic
-              </Button>
-              <Button
-                variant={toolbarState.isHeading1 ? "default" : "outline"}
-                size="sm"
-                onClick={() => activeEditor.chain().focus().toggleHeading({ level: 1 }).run()}
-              >
-                <Heading1 />
-                H1
-              </Button>
-              <Button
-                variant={toolbarState.isHeading2 ? "default" : "outline"}
-                size="sm"
-                onClick={() => activeEditor.chain().focus().toggleHeading({ level: 2 }).run()}
-              >
-                <Heading2 />
-                H2
-              </Button>
-              <Button
-                variant={toolbarState.isBulletList ? "default" : "outline"}
-                size="sm"
-                onClick={() => activeEditor.chain().focus().toggleBulletList().run()}
-              >
-                <List />
-                Bullets
-              </Button>
-              <Button
-                variant={toolbarState.isOrderedList ? "default" : "outline"}
-                size="sm"
-                onClick={() => activeEditor.chain().focus().toggleOrderedList().run()}
-              >
-                <ListOrdered />
-                Numbers
-              </Button>
-              <Button
-                variant={toolbarState.isBlockquote ? "default" : "outline"}
-                size="sm"
-                onClick={() => activeEditor.chain().focus().toggleBlockquote().run()}
-              >
-                <Quote />
-                Quote
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => activeEditor.chain().focus().setParagraph().run()}
-              >
-                <Type />
-                Paragraph
-              </Button>
-            </div>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Right-click nodes to add children, and use the style picker inside
-              the canvas to change the mind map type.
-            </p>
-          )}
-        </CardHeader>
-        <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
-          <div className={noteType === "mindmap" ? "min-h-0 flex-1 overflow-hidden" : "min-h-0 flex-1 overflow-y-auto"}>
-            {noteType === "text" ? (
-              <EditorContent className="h-full" editor={editor} />
+            <Separator />
+            {noteType === "text" && activeEditor ? (
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant={toolbarState.isBold ? "default" : "outline"}
+                  size="sm"
+                  onClick={() =>
+                    activeEditor.chain().focus().toggleBold().run()
+                  }
+                >
+                  <Bold />
+                  Bold
+                </Button>
+                <Button
+                  variant={toolbarState.isItalic ? "default" : "outline"}
+                  size="sm"
+                  onClick={() =>
+                    activeEditor.chain().focus().toggleItalic().run()
+                  }
+                >
+                  <Italic />
+                  Italic
+                </Button>
+                <Button
+                  variant={toolbarState.isHeading1 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() =>
+                    activeEditor
+                      .chain()
+                      .focus()
+                      .toggleHeading({ level: 1 })
+                      .run()
+                  }
+                >
+                  <Heading1 />
+                  H1
+                </Button>
+                <Button
+                  variant={toolbarState.isHeading2 ? "default" : "outline"}
+                  size="sm"
+                  onClick={() =>
+                    activeEditor
+                      .chain()
+                      .focus()
+                      .toggleHeading({ level: 2 })
+                      .run()
+                  }
+                >
+                  <Heading2 />
+                  H2
+                </Button>
+                <Button
+                  variant={toolbarState.isBulletList ? "default" : "outline"}
+                  size="sm"
+                  onClick={() =>
+                    activeEditor.chain().focus().toggleBulletList().run()
+                  }
+                >
+                  <List />
+                  Bullets
+                </Button>
+                <Button
+                  variant={toolbarState.isOrderedList ? "default" : "outline"}
+                  size="sm"
+                  onClick={() =>
+                    activeEditor.chain().focus().toggleOrderedList().run()
+                  }
+                >
+                  <ListOrdered />
+                  Numbers
+                </Button>
+                <Button
+                  variant={toolbarState.isBlockquote ? "default" : "outline"}
+                  size="sm"
+                  onClick={() =>
+                    activeEditor.chain().focus().toggleBlockquote().run()
+                  }
+                >
+                  <Quote />
+                  Quote
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    activeEditor.chain().focus().setParagraph().run()
+                  }
+                >
+                  <Type />
+                  Paragraph
+                </Button>
+              </div>
             ) : (
-              <MindmapEditor
-                value={noteContent as MindmapContent}
-                onChange={handleMindmapChange}
-              />
+              <p className="text-sm text-muted-foreground">
+                Right-click nodes to add children, and use the style picker
+                inside the canvas to change the mind map type.
+              </p>
             )}
-          </div>
-          {passwordChangeMessage ? (
-            <Alert>
-              <AlertTitle>Password changed</AlertTitle>
-              <AlertDescription>{passwordChangeMessage}</AlertDescription>
-            </Alert>
-          ) : null}
-          {recoveryEnabled && recoveryKeyMessage ? (
-            <Alert>
-              <AlertTitle>Recovery key rotated</AlertTitle>
-              <AlertDescription>{recoveryKeyMessage}</AlertDescription>
-            </Alert>
-          ) : null}
-          {syncMessage ? (
-            <Alert>
-              <AlertTitle>Synced latest copy</AlertTitle>
-              <AlertDescription>{syncMessage}</AlertDescription>
-            </Alert>
-          ) : null}
-          {saveError ? (
-            <Alert variant="destructive">
-              <AlertTitle>Autosave needs attention</AlertTitle>
-              <AlertDescription>{saveError}</AlertDescription>
-            </Alert>
-          ) : null}
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+            <div
+              className={
+                noteType === "mindmap"
+                  ? "min-h-0 flex-1 overflow-hidden"
+                  : "min-h-0 flex-1 overflow-y-auto"
+              }
+            >
+              {noteType === "text" ? (
+                <EditorContent className="h-full" editor={editor} />
+              ) : (
+                <MindmapEditor
+                  value={noteContent as MindmapContent}
+                  onChange={handleMindmapChange}
+                />
+              )}
+            </div>
+            {passwordChangeMessage ? (
+              <Alert>
+                <AlertTitle>Password changed</AlertTitle>
+                <AlertDescription>{passwordChangeMessage}</AlertDescription>
+              </Alert>
+            ) : null}
+            {recoveryEnabled && recoveryKeyMessage ? (
+              <Alert>
+                <AlertTitle>Recovery key rotated</AlertTitle>
+                <AlertDescription>{recoveryKeyMessage}</AlertDescription>
+              </Alert>
+            ) : null}
+            {syncMessage ? (
+              <Alert>
+                <AlertTitle>Synced latest copy</AlertTitle>
+                <AlertDescription>{syncMessage}</AlertDescription>
+              </Alert>
+            ) : null}
+            {saveError ? (
+              <Alert variant="destructive">
+                <AlertTitle>Autosave needs attention</AlertTitle>
+                <AlertDescription>{saveError}</AlertDescription>
+              </Alert>
+            ) : null}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
